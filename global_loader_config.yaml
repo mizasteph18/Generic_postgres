@@ -36,3 +36,7 @@ enable_data_validation: True
 # (based on IndexColumn in mapping) is detected, otherwise it will insert new records.
 # If false, it will only attempt to insert records.
 enable_duplicate_handling: True
+
+#
+timestamp_tolerance_seconds: 1.0
+
