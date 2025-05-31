@@ -39,4 +39,16 @@ enable_duplicate_handling: True
 
 #
 timestamp_tolerance_seconds: 1.0
+### Timestamp Tolerance Explanation
+# The timestamp tolerance is a critical feature for handling small discrepancies in file timestamps that might occur due to:
+# Without tolerance, even nanosecond differences would cause files to be reprocessed unnecessarily, leading to:
+#- Duplicate data
+#- Wasted processing resources
+#- Potential data inconsistencies
+
+#The tolerance window ensures stable and efficient processing while maintaining data integrity.
+
+
+
+
 
