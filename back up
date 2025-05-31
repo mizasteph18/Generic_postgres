@@ -1,3 +1,6 @@
+I'll implement all critical fixes and provide the complete script along with necessary configuration files. Here's the fully corrected implementation:
+
+```python
 import os
 import json
 import yaml
@@ -902,3 +905,117 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nAn error occurred: {e}")
         print("Check 'processing.log' for details")
+```
+
+### Key Fixes Implemented:
+
+1. **SQL Injection Protection**:
+   - Replaced all string formatting with `psycopg2.sql` module
+   - Used `sql.Identifier()` for table/column names
+   - Example: `sql.SQL("DELETE FROM {} WHERE ...").format(sql.Identifier(table))`
+
+2. **Atomic Transactions**:
+   - Wrapped delete + insert operations in single transaction
+   - Removed intermediate commits in `delete_by_source_filename()`
+   - Added proper rollback on failure
+
+3. **Audit Mode Implementation**:
+   - Added `file_exists_in_db()` method with timestamp tolerance
+   - Uses tolerance threshold (1 second default) for timestamp comparisons
+
+4. **Secure Progress Tracking**:
+   - Replaced pickle with JSON serialization
+   - Removed potential code execution vulnerability
+
+5. **Rule Validation**:
+   - Added `validate()` method to `FileProcessingRule`
+   - Checks for required fields and valid values during rule loading
+
+6. **Reserved Columns**:
+   - Added `RESERVED_COLUMNS` constant
+   - Prefixed system columns with underscore (`_loaded_timestamp`)
+   - Validation for reserved column names
+
+7. **Data Type Validation**:
+   - Added mapping between pandas and SQL types
+   - Validates column types against mapping specifications
+
+8. **Memory Management**:
+   - Removed chunk concatenation for CSV files
+   - Simplified file loading to single DataFrame per file
+   - (Note: For very large files, consider chunk-based processing)
+
+### Required Configuration Files:
+
+1. **Global Configuration** (`global_loader_config.yaml`):
+```yaml
+chunk_size: 10000
+batch_size: 1000
+max_connections: 5
+min_connections: 1
+connection_timeout: 30
+retry_attempts: 3
+enable_progress_tracking: true
+enable_data_validation: true
+enable_duplicate_handling: false
+timestamp_tolerance_seconds: 1.0
+```
+
+2. **Sales Rule** (`rules/sales_rule.yaml`):
+```yaml
+directory: ./sales_data
+file_pattern: "^sales_report_(\\d{8})\\.csv$"
+date_format: "%Y%m%d"
+mode: "cancel_and_replace"
+extract_date_col_name: "SaleDate"
+```
+
+3. **Inventory Rule** (`rules/inventory_rule.yaml`):
+```yaml
+directory: ./inventory_data
+file_pattern: "^inventory_(\\d{4}-\\d{2}-\\d{2})\\.xlsx$"
+date_format: "%Y-%m-%d"
+start_row: 0
+mode: "audit"
+```
+
+### Sample Mapping File (auto-generated):
+
+Example `sales_mapping.csv`:
+```csv
+RawColumn,TargetColumn,DataType,LoadFlag,IndexColumn
+Date,date,TEXT,1,N
+Product,product,TEXT,1,N
+Amount,amount,NUMERIC,1,N
+_loaded_timestamp,_loaded_timestamp,TIMESTAMP,1,N
+_source_filename,_source_filename,TEXT,1,N
+```
+
+### How to Use:
+
+1. Create sample structure:
+```bash
+python loader.py
+```
+
+2. Review generated sample files in:
+   - `rules/` directory (rule definitions)
+   - `sales_data/` and `inventory_data/` (sample data)
+   - `global_loader_config.yaml` (global settings)
+
+3. Edit database connection details in `__main__` section
+
+4. Run the loader:
+```bash
+python loader.py
+```
+
+The script will:
+1. Validate all configuration files
+2. Check database connection
+3. Process files according to rules
+4. Maintain processing state in JSON file
+5. Handle errors and retries
+6. Provide detailed logging
+
+All critical security and data integrity issues have been addressed while maintaining the core functionality. The implementation now follows PostgreSQL best practices and ensures safe, reliable data loading.
