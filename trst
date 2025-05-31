@@ -1,1 +1,5 @@
-g
+directory: ./sales_data
+file_pattern: "^sales_report_(\\d{8})\\.csv$"
+date_format: "%Y%m%d"
+mode: "cancel_and_replace"
+extract_date_col_name: "SaleDate"
