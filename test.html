@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moniteur d'Échanges Outlook</title>
+    <style>
+        :root {
+            --primary-color: #0078d4;
+            --secondary-color: #f3f2f1;
+            --danger-color: #d13438;
+            --warning-color: #ffaa44;
+            --success-color: #107c10;
+            --border-color: #d1d1d1;
+            --text-color: #323130;
+            --light-text: #605e5c;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #faf9f8;
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background-color: var(--secondary-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .folder-selector {
+            flex: 1;
+            margin-right: 20px;
+        }
+        
+        .folder-selector select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .filter-options {
+            display: flex;
+            align-items: center;
+        }
+        
+        .filter-options label {
+            margin-right: 10px;
+            font-weight: 500;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background-color: var(--secondary-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .nav-buttons button {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            background-color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .nav-buttons button:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .message-info {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .message-content {
+            padding: 20px;
+            min-height: 400px;
+            border-bottom: 1px solid var(--border-color);
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        
+        .message-actions {
+            display: flex;
+            justify-content: center;
+            padding: 15px;
+            gap: 15px;
+        }
+        
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        
+        .delete-btn {
+            background-color: var(--danger-color);
+        }
+        
+        .delete-btn:hover {
+            background-color: #a4262c;
+        }
+        
+        .keep-btn {
+            background-color: var(--success-color);
+        }
+        
+        .keep-btn:hover {
+            background-color: #0e6b0e;
+        }
+        
+        .review-btn {
+            background-color: var(--warning-color);
+        }
+        
+        .review-btn:hover {
+            background-color: #e69500;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        .modal h3 {
+            margin-bottom: 15px;
+            color: var(--danger-color);
+        }
+        
+        .modal p {
+            margin-bottom: 20px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .modal-buttons button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .cancel-btn {
+            background-color: var(--secondary-color);
+        }
+        
+        .confirm-btn {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        .status-filters {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .status-filter {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .message-header {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .message-header div {
+            margin-bottom: 5px;
+        }
+        
+        .message-body {
+            padding: 15px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Moniteur d'Échanges Outlook</h1>
+        </header>
+        
+        <div class="controls">
+            <div class="folder-selector">
+                <label for="process-select">Sélectionnez le processus :</label>
+                <select id="process-select">
+                    <option value="">-- Choisir un dossier --</option>
+                    <option value="process1">Processus Marketing</option>
+                    <option value="process2">Processus Ventes</option>
+                    <option value="process3">Processus RH</option>
+                    <option value="process4">Processus IT</option>
+                </select>
+            </div>
+            
+            <div class="filter-options">
+                <label>Filtrer par statut :</label>
+                <div class="status-filters">
+                    <div class="status-filter">
+                        <input type="checkbox" id="show-keep" checked>
+                        <label for="show-keep">Keep</label>
+                    </div>
+                    <div class="status-filter">
+                        <input type="checkbox" id="show-review" checked>
+                        <label for="show-review">To Review</label>
+                    </div>
+                    <div class="status-filter">
+                        <input type="checkbox" id="show-untagged" checked>
+                        <label for="show-untagged">Non classés</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="navigation">
+            <div class="nav-buttons">
+                <button id="prev-btn">Previous</button>
+                <button id="next-btn">Next</button>
+            </div>
+            <div class="message-counter">
+                Message <span id="current-index">0</span> sur <span id="total-count">0</span>
+            </div>
+        </div>
+        
+        <div class="message-info">
+            <div id="message-subject">Sujet du message</div>
+            <div id="message-date">Date: --/--/----</div>
+            <div id="message-status">Statut: Non classé</div>
+        </div>
+        
+        <div class="message-content">
+            <div class="message-header">
+                <div><strong>De:</strong> <span id="message-from">expéditeur@exemple.com</span></div>
+                <div><strong>À:</strong> <span id="message-to">destinataire@exemple.com</span></div>
+                <div><strong>Date:</strong> <span id="message-date-full">--/--/---- --:--</span></div>
+            </div>
+            <div class="message-body" id="message-body">
+                Contenu du message sélectionné...
+            </div>
+        </div>
+        
+        <div class="message-actions">
+            <button class="action-btn delete-btn" id="delete-btn">Delete</button>
+            <button class="action-btn keep-btn" id="keep-btn">Keep</button>
+            <button class="action-btn review-btn" id="review-btn">To Review</button>
+        </div>
+    </div>
+    
+    <!-- Modal de confirmation pour la suppression -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content">
+            <h3>Confirmer la suppression</h3>
+            <p>Êtes-vous sûr de vouloir supprimer ce message ? Cette action est irréversible.</p>
+            <div class="modal-buttons">
+                <button class="cancel-btn" id="cancel-delete">Annuler</button>
+                <button class="confirm-btn" id="confirm-delete">Supprimer définitivement</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Données simulées pour la démonstration
+        const messagesData = {
+            process1: [
+                {
+                    id: 1,
+                    subject: "Réponse: Proposition Marketing Q3",
+                    from: "marie.dubois@entreprise.com",
+                    to: "equipe.marketing@entreprise.com",
+                    date: "2023-10-15T14:30:00",
+                    body: "Bonjour à tous,\n\nJe suis d'accord avec la proposition générale, mais je pense que nous devrions revoir le budget alloué aux réseaux sociaux.\n\nJe vous propose une réunion mercredi prochain pour en discuter.\n\nCordialement,\nMarie",
+                    status: "untagged"
+                },
+                {
+                    id: 2,
+                    subject: "RE: Campagne publicitaire été 2023",
+                    from: "pierre.martin@entreprise.com",
+                    to: "marie.dubois@entreprise.com",
+                    date: "2023-10-14T11:15:00",
+                    body: "Marie,\n\nLes résultats préliminaires sont excellents. Nous avons dépassé nos objectifs de 15%.\n\nJe joins le rapport détaillé.\n\nPierre",
+                    status: "keep"
+                },
+                {
+                    id: 3,
+                    subject: "FW: Analyse concurrentielle",
+                    from: "sophie.leroy@entreprise.com",
+                    to: "equipe.marketing@entreprise.com",
+                    date: "2023-10-13T09:45:00",
+                    body: "Bonjour,\n\nJ'ai analysé les dernières campagnes de nos concurrents. Il y a des tendances intéressantes que nous pourrions adapter.\n\nJe vous propose de présenter mes conclusions lors de la réunion de jeudi.\n\nSophie",
+                    status: "review"
+                }
+            ],
+            process2: [
+                {
+                    id: 1,
+                    subject: "RE: Offre spéciale clientèle fidèle",
+                    from: "jean.dupont@entreprise.com",
+                    to: "service.ventes@entreprise.com",
+                    date: "2023-10-16T16:20:00",
+                    body: "L'offre a été très bien reçue par nos clients. Nous avons déjà enregistré 45 nouvelles commandes.\n\nJe recommande d'étendre cette offre à tous nos clients réguliers.\n\nJean",
+                    status: "untagged"
+                }
+            ],
+            process3: [
+                {
+                    id: 1,
+                    subject: "RE: Recrutement poste développeur",
+                    from: "luc.moreau@entreprise.com",
+                    to: "rh@entreprise.com",
+                    date: "2023-10-17T10:30:00",
+                    body: "Nous avons reçu plus de 80 candidatures pour ce poste. Je propose d'organiser des entretiens la semaine prochaine.\n\nPouvez-vous préparer la salle de réunion pour mardi et mercredi?\n\nLuc",
+                    status: "untagged"
+                }
+            ],
+            process4: [
+                {
+                    id: 1,
+                    subject: "RE: Mise à jour système ERP",
+                    from: "alex.tremblay@entreprise.com",
+                    to: "equipe.it@entreprise.com",
+                    date: "2023-10-18T13:45:00",
+                    body: "La mise à jour est prévue pour le week-end prochain. Nous aurons besoin d'une fenêtre de maintenance de 6 heures.\n\nMerci de prévenir tous les utilisateurs.\n\nAlex",
+                    status: "untagged"
+                }
+            ]
+        };
+
+        // État de l'application
+        let currentProcess = '';
+        let currentMessages = [];
+        let filteredMessages = [];
+        let currentIndex = 0;
+        
+        // Éléments DOM
+        const processSelect = document.getElementById('process-select');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const currentIndexSpan = document.getElementById('current-index');
+        const totalCountSpan = document.getElementById('total-count');
+        const messageSubject = document.getElementById('message-subject');
+        const messageDate = document.getElementById('message-date');
+        const messageStatus = document.getElementById('message-status');
+        const messageFrom = document.getElementById('message-from');
+        const messageTo = document.getElementById('message-to');
+        const messageDateFull = document.getElementById('message-date-full');
+        const messageBody = document.getElementById('message-body');
+        const deleteBtn = document.getElementById('delete-btn');
+        const keepBtn = document.getElementById('keep-btn');
+        const reviewBtn = document.getElementById('review-btn');
+        const deleteModal = document.getElementById('delete-modal');
+        const cancelDeleteBtn = document.getElementById('cancel-delete');
+        const confirmDeleteBtn = document.getElementById('confirm-delete');
+        const showKeepCheckbox = document.getElementById('show-keep');
+        const showReviewCheckbox = document.getElementById('show-review');
+        const showUntaggedCheckbox = document.getElementById('show-untagged');
+        
+        // Événements
+        processSelect.addEventListener('change', handleProcessChange);
+        prevBtn.addEventListener('click', showPreviousMessage);
+        nextBtn.addEventListener('click', showNextMessage);
+        deleteBtn.addEventListener('click', showDeleteModal);
+        keepBtn.addEventListener('click', markAsKeep);
+        reviewBtn.addEventListener('click', markAsReview);
+        cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+        confirmDeleteBtn.addEventListener('click', deleteCurrentMessage);
+        showKeepCheckbox.addEventListener('change', applyFilters);
+        showReviewCheckbox.addEventListener('change', applyFilters);
+        showUntaggedCheckbox.addEventListener('change', applyFilters);
+        
+        // Fonctions
+        function handleProcessChange() {
+            currentProcess = processSelect.value;
+            if (currentProcess) {
+                currentMessages = messagesData[currentProcess] || [];
+                applyFilters();
+                if (filteredMessages.length > 0) {
+                    currentIndex = 0;
+                    displayCurrentMessage();
+                } else {
+                    clearMessageDisplay();
+                }
+            } else {
+                clearMessageDisplay();
+            }
+        }
+        
+        function applyFilters() {
+            const showKeep = showKeepCheckbox.checked;
+            const showReview = showReviewCheckbox.checked;
+            const showUntagged = showUntaggedCheckbox.checked;
+            
+            filteredMessages = currentMessages.filter(message => {
+                if (message.status === 'keep' && showKeep) return true;
+                if (message.status === 'review' && showReview) return true;
+                if (message.status === 'untagged' && showUntagged) return true;
+                return false;
+            });
+            
+            if (filteredMessages.length > 0) {
+                currentIndex = Math.min(currentIndex, filteredMessages.length - 1);
+                displayCurrentMessage();
+            } else {
+                clearMessageDisplay();
+            }
+        }
+        
+        function displayCurrentMessage() {
+            if (filteredMessages.length === 0) {
+                clearMessageDisplay();
+                return;
+            }
+            
+            const message = filteredMessages[currentIndex];
+            
+            // Mise à jour de l'interface
+            messageSubject.textContent = message.subject;
+            messageFrom.textContent = message.from;
+            messageTo.textContent = message.to;
+            
+            const dateObj = new Date(message.date);
+            messageDate.textContent = `Date: ${formatDate(dateObj)}`;
+            messageDateFull.textContent = formatFullDate(dateObj);
+            
+            messageBody.textContent = message.body;
+            
+            // Mise à jour du statut
+            let statusText = '';
+            let statusColor = '';
+            switch(message.status) {
+                case 'keep':
+                    statusText = 'Keep';
+                    statusColor = 'green';
+                    break;
+                case 'review':
+                    statusText = 'To Review';
+                    statusColor = 'orange';
+                    break;
+                default:
+                    statusText = 'Non classé';
+                    statusColor = 'gray';
+            }
+            messageStatus.textContent = `Statut: ${statusText}`;
+            messageStatus.style.color = statusColor;
+            
+            // Mise à jour du compteur
+            currentIndexSpan.textContent = currentIndex + 1;
+            totalCountSpan.textContent = filteredMessages.length;
+            
+            // Activation/désactivation des boutons de navigation
+            prevBtn.disabled = currentIndex === 0;
+            nextBtn.disabled = currentIndex === filteredMessages.length - 1;
+        }
+        
+        function clearMessageDisplay() {
+            messageSubject.textContent = 'Aucun message à afficher';
+            messageFrom.textContent = '';
+            messageTo.textContent = '';
+            messageDate.textContent = 'Date: --/--/----';
+            messageDateFull.textContent = '--/--/---- --:--';
+            messageBody.textContent = 'Sélectionnez un processus pour afficher les messages.';
+            messageStatus.textContent = 'Statut: --';
+            messageStatus.style.color = 'inherit';
+            
+            currentIndexSpan.textContent = '0';
+            totalCountSpan.textContent = '0';
+            
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+        }
+        
+        function showPreviousMessage() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                displayCurrentMessage();
+            }
+        }
+        
+        function showNextMessage() {
+            if (currentIndex < filteredMessages.length - 1) {
+                currentIndex++;
+                displayCurrentMessage();
+            }
+        }
+        
+        function showDeleteModal() {
+            deleteModal.style.display = 'flex';
+        }
+        
+        function hideDeleteModal() {
+            deleteModal.style.display = 'none';
+        }
+        
+        function deleteCurrentMessage() {
+            if (filteredMessages.length === 0) return;
+            
+            const messageId = filteredMessages[currentIndex].id;
+            
+            // Suppression du message dans les données
+            const messageIndex = currentMessages.findIndex(msg => msg.id === messageId);
+            if (messageIndex !== -1) {
+                currentMessages.splice(messageIndex, 1);
+            }
+            
+            // Mise à jour de l'affichage
+            applyFilters();
+            hideDeleteModal();
+            
+            // Dans une application réelle, on enverrait une requête au serveur pour supprimer le fichier
+            console.log(`Message ${messageId} supprimé`);
+        }
+        
+        function markAsKeep() {
+            if (filteredMessages.length === 0) return;
+            
+            const messageId = filteredMessages[currentIndex].id;
+            const message = currentMessages.find(msg => msg.id === messageId);
+            
+            if (message) {
+                message.status = 'keep';
+                displayCurrentMessage();
+                
+                // Dans une application réelle, on enverrait une requête au serveur pour mettre à jour le statut
+                console.log(`Message ${messageId} marqué comme "Keep"`);
+            }
+        }
+        
+        function markAsReview() {
+            if (filteredMessages.length === 0) return;
+            
+            const messageId = filteredMessages[currentIndex].id;
+            const message = currentMessages.find(msg => msg.id === messageId);
+            
+            if (message) {
+                message.status = 'review';
+                displayCurrentMessage();
+                
+                // Dans une application réelle, on enverrait une requête au serveur pour mettre à jour le statut
+                console.log(`Message ${messageId} marqué comme "To Review"`);
+            }
+        }
+        
+        function formatDate(date) {
+            return date.toLocaleDateString('fr-FR');
+        }
+        
+        function formatFullDate(date) {
+            return date.toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Initialisation
+        clearMessageDisplay();
+    </script>
+</body>
+</html>
