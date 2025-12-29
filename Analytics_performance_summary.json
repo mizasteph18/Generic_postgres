@@ -1,0 +1,65 @@
+{
+  "id": "analytics_performance_summary",
+  "name": "Performance Summary",
+  "description": "Affiche un résumé des performances web",
+  "type": "dashboard",
+  "layout": "vertical",
+  "visualizations": [
+    {
+      "type": "chart",
+      "title": "Average Loading Time - ${level4.timeRange}",
+      "chart_type": "line",
+      "data_source": {
+        "type": "sql",
+        "query": "SELECT date, avg_load_time FROM website_performance WHERE date >= CURRENT_DATE - INTERVAL '${level4.timeRange}' ORDER BY date"
+      },
+      "config": {
+        "x_column": "date",
+        "y_column": "avg_load_time",
+        "layout": {
+          "title": "Page Load Time Trend",
+          "xaxis_title": "Date",
+          "yaxis_title": "Load Time (s)"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Key Performance Metrics",
+      "data_source": {
+        "type": "sql",
+        "query": "SELECT metric, current_value, target_value, status FROM kpi_summary WHERE metric IN (${level3.webMetrics}) ORDER BY priority"
+      },
+      "config": {
+        "columns": ["Metric", "Current Value", "Target", "Status", "Trend"],
+        "sort_by": "priority"
+      }
+    },
+    {
+      "type": "metric",
+      "title": "Overall Performance Score",
+      "data_source": {
+        "type": "sql",
+        "query": "SELECT avg(score) as overall_score FROM performance_scores WHERE period = '${level4.timeRange}'"
+      },
+      "config": {
+        "format": "percentage",
+        "thresholds": {
+          "good": 80,
+          "warning": 60,
+          "critical": 40
+        }
+      }
+    }
+  ],
+  "filters": {
+    "time_range": "${level4.timeRange}",
+    "metrics": "${level3.webMetrics}",
+    "granularity": "${level4.granularity}"
+  },
+  "metadata": {
+    "refresh_interval": 300,
+    "export_formats": ["pdf", "csv", "png"],
+    "access_level": "viewer"
+  }
+}
