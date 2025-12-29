@@ -1,388 +1,636 @@
-# app.py - Structure générique pour serveur JSON-driven
 import os
-from flask import Flask, request, jsonify, send_from_directory, render_template_string
-from flask_cors import CORS
 import json
 import uuid
 from datetime import datetime
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-import io
-import base64
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from sqlalchemy import create_engine
+import logging
+from dotenv import load_dotenv
+
+# Chargement des variables d'environnement
+load_dotenv()
 
 # Configuration
-CONFIG_DIR = "page_configs"
-DATA_SOURCE = "postgresql"  # ou "mysql", "api", "csv", etc.
+CONFIG_FILE = "config.json"
+PAGE_CONFIGS_DIR = "page_configs"
+GENERATED_PAGES_DIR = "generated_pages"
 
-app = Flask(__name__, 
-            static_folder='static',
-            template_folder='templates')
+# Configuration de la base de données
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'database': os.getenv('DB_NAME', 'dashboard_db'),
+    'user': os.getenv('DB_USER', 'postgres'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'port': os.getenv('DB_PORT', 5432)
+}
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# ============================================
-# 1. GESTION DES CONFIGURATIONS
-# ============================================
-class ConfigurationManager:
-    """Gère le chargement et la validation des configurations"""
-    
-    @staticmethod
-    def load_config(config_type):
-        """Charge une configuration par type"""
-        config_path = f"configs/{config_type}.json"
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return None
-    
-    @staticmethod
-    def load_page_config(page_id):
-        """Charge la configuration d'une page spécifique"""
-        page_path = f"{CONFIG_DIR}/{page_id}"
-        if os.path.exists(page_path):
-            with open(page_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return None
-    
-    @staticmethod
-    def save_page_config(page_id, config_data):
-        """Sauvegarde une configuration de page"""
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        page_path = f"{CONFIG_DIR}/{page_id}"
-        with open(page_path, 'w', encoding='utf-8') as f:
-            json.dump(config_data, f, indent=2, ensure_ascii=False)
-        return True
+# ==================== CLASSES DE L'ANCIENNE VERSION ====================
 
-# ============================================
-# 2. EXÉCUTEUR DE REQUÊTES GÉNÉRIQUE
-# ============================================
+class DatabaseManager:
+    """Gestionnaire de connexion PostgreSQL"""
+    
+    @staticmethod
+    def get_connection():
+        """Obtenir une connexion à PostgreSQL"""
+        try:
+            conn = psycopg2.connect(**DB_CONFIG)
+            return conn
+        except Exception as e:
+            logger.error(f"Erreur connexion DB: {e}")
+            return None
+    
+    @staticmethod
+    def execute_query(query, params=None):
+        """Exécuter une requête SQL et retourner un DataFrame"""
+        conn = DatabaseManager.get_connection()
+        if conn:
+            try:
+                df = pd.read_sql(query, conn, params=params)
+                conn.close()
+                return df
+            except Exception as e:
+                logger.error(f"Erreur exécution requête: {e}")
+                conn.close()
+                return pd.DataFrame()
+        return pd.DataFrame()
+
 class QueryExecutor:
     """Exécute des requêtes basées sur la configuration"""
     
-    def __init__(self, data_source=DATA_SOURCE):
-        self.data_source = data_source
-        
-    def execute(self, query_config, params=None):
-        """Exécute une requête basée sur la configuration"""
+    @staticmethod
+    def execute(query_config, params=None):
+        """Exécuter une requête basée sur la configuration"""
         query_type = query_config.get('type', 'sql')
         
-        if query_type == 'sql':
-            return self._execute_sql(query_config, params)
-        elif query_type == 'api':
-            return self._execute_api(query_config, params)
-        elif query_type == 'file':
-            return self._execute_file(query_config, params)
-        elif query_type == 'function':
-            return self._execute_function(query_config, params)
-        else:
-            raise ValueError(f"Type de requête non supporté: {query_type}")
+        try:
+            if query_type == 'sql':
+                return QueryExecutor._execute_sql(query_config, params)
+            elif query_type == 'static':
+                return QueryExecutor._execute_static(query_config, params)
+            elif query_type == 'api':
+                return QueryExecutor._execute_api(query_config, params)
+            elif query_type == 'function':
+                return QueryExecutor._execute_function(query_config, params)
+            else:
+                logger.warning(f"Type de requête non supporté: {query_type}")
+                return QueryExecutor._get_sample_data(query_config)
+        except Exception as e:
+            logger.error(f"Exécution requête échouée: {e}")
+            return QueryExecutor._get_sample_data(query_config)
     
-    def _execute_sql(self, query_config, params):
-        """Exécute une requête SQL"""
-        # Implémentation générique pour PostgreSQL/MySQL
-        # À adapter selon votre configuration
-        import psycopg2
-        from sqlalchemy import create_engine
-        
-        query = query_config.get('query')
-        db_config = query_config.get('connection', 'default')
+    @staticmethod
+    def _execute_sql(query_config, params):
+        """Exécuter une requête SQL"""
+        query = query_config.get('query', '')
         
         # Remplacer les paramètres dans la requête
         if params:
             for key, value in params.items():
-                query = query.replace(f'{{{key}}}', str(value))
+                if isinstance(value, str):
+                    query = query.replace(f'{{{key}}}', f"'{value}'")
+                else:
+                    query = query.replace(f'{{{key}}}', str(value))
         
-        # Exécution (exemple avec PostgreSQL)
+        # Remplacer aussi les placeholders de style ${...}
+        if params:
+            for key, value in params.items():
+                placeholder = f"${{{key}}}"
+                if isinstance(value, str):
+                    query = query.replace(placeholder, f"'{value}'")
+                else:
+                    query = query.replace(placeholder, str(value))
+        
+        logger.debug(f"Exécution SQL: {query[:200]}...")
+        return DatabaseManager.execute_query(query)
+    
+    @staticmethod
+    def _execute_static(query_config, params):
+        """Exécuter une requête statique"""
+        data = query_config.get('data', {})
+        
+        if 'columns' in data and 'rows' in data:
+            return pd.DataFrame(data['rows'], columns=data['columns'])
+        elif 'labels' in data and 'values' in data:
+            return pd.DataFrame({
+                'label': data['labels'],
+                'value': data['values']
+            })
+        elif isinstance(data, dict):
+            return pd.DataFrame([data])
+        elif isinstance(data, list):
+            return pd.DataFrame(data)
+        else:
+            return pd.DataFrame()
+    
+    @staticmethod
+    def _execute_api(query_config, params):
+        """Exécuter un appel API"""
         try:
-            conn = psycopg2.connect(**self._get_db_config(db_config))
-            df = pd.read_sql(query, conn)
-            conn.close()
-            return df
+            import requests
+            
+            url = query_config.get('url')
+            method = query_config.get('method', 'GET')
+            headers = query_config.get('headers', {})
+            
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=headers,
+                params=params
+            )
+            
+            if response.status_code == 200:
+                return pd.DataFrame(response.json())
+            else:
+                logger.error(f"Erreur API: {response.status_code}")
+                return pd.DataFrame()
         except Exception as e:
-            # Fallback: données simulées pour le développement
-            return self._get_sample_data(query_config)
+            logger.error(f"Erreur appel API: {e}")
+            return pd.DataFrame()
     
-    def _execute_api(self, query_config, params):
-        """Exécute un appel API"""
-        import requests
-        
-        url = query_config.get('url')
-        method = query_config.get('method', 'GET')
-        headers = query_config.get('headers', {})
-        
-        response = requests.request(
-            method=method,
-            url=url,
-            headers=headers,
-            params=params
-        )
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"error": f"API error: {response.status_code}"}
+    @staticmethod
+    def _execute_function(query_config, params):
+        """Exécuter une fonction Python"""
+        try:
+            module_name = query_config.get('module', 'data_functions')
+            function_name = query_config.get('function')
+            
+            # Import dynamique
+            module = __import__(module_name)
+            function = getattr(module, function_name)
+            
+            result = function(**params) if params else function()
+            
+            # Convertir en DataFrame si possible
+            if isinstance(result, dict):
+                return pd.DataFrame([result])
+            elif isinstance(result, list):
+                return pd.DataFrame(result)
+            else:
+                return pd.DataFrame({'value': [result]})
+        except Exception as e:
+            logger.error(f"Erreur fonction: {e}")
+            return pd.DataFrame()
     
-    def _execute_file(self, query_config, params):
-        """Charge des données depuis un fichier"""
-        file_path = query_config.get('path')
-        file_type = query_config.get('file_type', 'csv')
-        
-        if file_type == 'csv':
-            return pd.read_csv(file_path)
-        elif file_type == 'json':
-            return pd.read_json(file_path)
-        elif file_type == 'excel':
-            return pd.read_excel(file_path)
-        else:
-            raise ValueError(f"Type de fichier non supporté: {file_type}")
-    
-    def _execute_function(self, query_config, params):
-        """Exécute une fonction Python"""
-        function_name = query_config.get('function')
-        module_name = query_config.get('module', 'data_functions')
-        
-        # Import dynamique du module
-        module = __import__(module_name)
-        function = getattr(module, function_name)
-        
-        return function(**params) if params else function()
-    
-    def _get_db_config(self, config_name):
-        """Récupère la configuration de base de données"""
-        # À adapter avec vos configurations réelles
-        configs = {
-            'default': {
-                'host': 'localhost',
-                'database': 'app_db',
-                'user': 'user',
-                'password': 'password',
-                'port': 5432
-            }
-        }
-        return configs.get(config_name, configs['default'])
-    
-    def _get_sample_data(self, query_config):
-        """Retourne des données d'exemple pour le développement"""
-        # Génère des données de démo basées sur la configuration
+    @staticmethod
+    def _get_sample_data(query_config):
+        """Générer des données d'exemple"""
         chart_type = query_config.get('chart_type', 'bar')
         
         if chart_type == 'line':
             dates = pd.date_range(start='2024-01-01', periods=30, freq='D')
             values = [100 + i * 2 + (i % 7) * 10 for i in range(30)]
             return pd.DataFrame({'date': dates, 'value': values})
-        
         elif chart_type == 'bar':
             categories = ['A', 'B', 'C', 'D', 'E']
             values = [25, 40, 30, 35, 20]
             return pd.DataFrame({'category': categories, 'value': values})
-        
         else:
-            # Données tabulaires par défaut
             return pd.DataFrame({
                 'id': range(1, 11),
                 'name': [f'Item {i}' for i in range(1, 11)],
-                'value': [i * 10 for i in range(1, 11)],
-                'category': ['A', 'B', 'A', 'C', 'B', 'A', 'C', 'B', 'A', 'C']
+                'value': [i * 10 for i in range(1, 11)]
             })
 
-# ============================================
-# 3. GÉNÉRATEUR DE VISUALISATIONS
-# ============================================
 class VisualizationGenerator:
-    """Génère des visualisations basées sur les données"""
+    """Génère des visualisations dynamiques à partir des données"""
     
     @staticmethod
     def generate_chart(data, chart_config):
-        """Génère un graphique Plotly"""
+        """Générer un graphique Plotly dynamique"""
+        if data.empty:
+            return json.dumps({
+                'data': [],
+                'layout': {
+                    'title': 'No Data Available',
+                    'plot_bgcolor': 'white',
+                    'paper_bgcolor': 'white'
+                }
+            })
+        
         chart_type = chart_config.get('type', 'line')
         
-        if isinstance(data, pd.DataFrame):
+        try:
+            # Obtenir les colonnes de configuration ou utiliser les premières colonnes
+            x_column = chart_config.get('x_column', data.columns[0] if len(data.columns) > 0 else 'index')
+            y_column = chart_config.get('y_column', data.columns[1] if len(data.columns) > 1 else data.columns[0])
+            
+            if x_column == 'index':
+                x_data = list(range(len(data)))
+            else:
+                x_data = data[x_column].tolist()
+            
             if chart_type == 'line':
                 fig = go.Figure()
-                for column in data.columns[1:]:  # Première colonne = axe X
+                
+                # Si y_column est une liste, créer plusieurs lignes
+                if isinstance(y_column, list):
+                    for col in y_column:
+                        if col in data.columns:
+                            fig.add_trace(go.Scatter(
+                                x=x_data,
+                                y=data[col].tolist(),
+                                mode='lines+markers',
+                                name=col,
+                                line=dict(width=3)
+                            ))
+                else:
                     fig.add_trace(go.Scatter(
-                        x=data.iloc[:, 0],
-                        y=data[column],
+                        x=x_data,
+                        y=data[y_column].tolist(),
                         mode='lines+markers',
-                        name=column
+                        name=y_column,
+                        line=dict(width=3, color='#3498db')
                     ))
             
             elif chart_type == 'bar':
                 fig = go.Figure()
-                for i, column in enumerate(data.columns[1:]):
+                
+                if isinstance(y_column, list):
+                    for col in y_column:
+                        if col in data.columns:
+                            fig.add_trace(go.Bar(
+                                x=x_data,
+                                y=data[col].tolist(),
+                                name=col
+                            ))
+                else:
                     fig.add_trace(go.Bar(
-                        x=data.iloc[:, 0],
-                        y=data[column],
-                        name=column
+                        x=x_data,
+                        y=data[y_column].tolist(),
+                        name=y_column,
+                        marker_color='#2ecc71'
                     ))
             
             elif chart_type == 'pie':
+                labels_col = chart_config.get('labels_column', data.columns[0])
+                values_col = chart_config.get('values_column', data.columns[1] if len(data.columns) > 1 else data.columns[0])
+                
                 fig = go.Figure(data=[go.Pie(
-                    labels=data.iloc[:, 0],
-                    values=data.iloc[:, 1]
+                    labels=data[labels_col].tolist(),
+                    values=data[values_col].tolist(),
+                    hole=0.3,
+                    marker=dict(colors=['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6'])
                 )])
             
             elif chart_type == 'scatter':
                 fig = go.Figure(data=go.Scatter(
-                    x=data.iloc[:, 0],
-                    y=data.iloc[:, 1],
-                    mode='markers'
+                    x=data[x_column].tolist(),
+                    y=data[y_column].tolist(),
+                    mode='markers',
+                    marker=dict(
+                        size=10,
+                        color=data[y_column].tolist() if len(data.columns) > 2 else '#3498db',
+                        colorscale='Viridis',
+                        showscale=True
+                    )
                 ))
             
             else:
                 # Graphique par défaut
                 fig = go.Figure(data=[go.Scatter(
                     x=list(range(len(data))),
-                    y=data.iloc[:, 1] if len(data.columns) > 1 else data.iloc[:, 0],
+                    y=data.iloc[:, 0].tolist(),
                     mode='lines'
                 )])
             
             # Appliquer la configuration du layout
             layout_config = chart_config.get('layout', {})
+            
             fig.update_layout(
                 title=layout_config.get('title', 'Chart'),
-                xaxis_title=layout_config.get('xaxis_title', ''),
-                yaxis_title=layout_config.get('yaxis_title', ''),
-                template=layout_config.get('template', 'plotly_white')
+                xaxis_title=layout_config.get('xaxis_title', x_column),
+                yaxis_title=layout_config.get('yaxis_title', y_column if isinstance(y_column, str) else 'Value'),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(family='Arial', size=12),
+                hovermode='closest',
+                showlegend=True
             )
             
+            # Ajouter des options de configuration supplémentaires
+            if 'template' in layout_config:
+                fig.update_layout(template=layout_config['template'])
+            
+            if 'height' in layout_config:
+                fig.update_layout(height=layout_config['height'])
+            
+            if 'width' in layout_config:
+                fig.update_layout(width=layout_config['width'])
+            
             return fig.to_json()
-        
-        return None
+            
+        except Exception as e:
+            logger.error(f"Erreur génération chart: {e}")
+            return json.dumps({'error': str(e)})
     
     @staticmethod
     def generate_table(data, table_config):
-        """Formate les données pour un tableau"""
-        if isinstance(data, pd.DataFrame):
-            return {
-                'columns': data.columns.tolist(),
-                'rows': data.values.tolist(),
-                'total': len(data)
-            }
-        elif isinstance(data, list):
-            return {
-                'columns': list(data[0].keys()) if data else [],
-                'rows': [[row.get(col) for col in row.keys()] for row in data],
-                'total': len(data)
-            }
-        else:
-            return {
-                'columns': [],
-                'rows': [],
-                'total': 0
-            }
+        """Générer un tableau dynamique"""
+        if data.empty:
+            return {'columns': [], 'rows': [], 'total': 0}
+        
+        # Appliquer les transformations si spécifiées
+        if 'transform' in table_config:
+            data = VisualizationGenerator._apply_transforms(data, table_config['transform'])
+        
+        # Sélectionner les colonnes spécifiques si configuré
+        columns = table_config.get('columns', data.columns.tolist())
+        
+        # Filtrer les colonnes disponibles
+        available_columns = [col for col in columns if col in data.columns]
+        
+        if not available_columns:
+            available_columns = data.columns.tolist()
+        
+        # Formater les valeurs si nécessaire
+        rows = []
+        for _, row in data.iterrows():
+            formatted_row = []
+            for col in available_columns:
+                value = row[col]
+                # Appliquer le formatage si spécifié
+                if 'format' in table_config:
+                    format_config = table_config['format']
+                    if col in format_config:
+                        if format_config[col] == 'currency':
+                            value = f"${value:,.2f}"
+                        elif format_config[col] == 'percentage':
+                            value = f"{value}%"
+                        elif format_config[col] == 'number':
+                            value = f"{value:,.0f}"
+                formatted_row.append(str(value))
+            rows.append(formatted_row)
+        
+        return {
+            'columns': available_columns,
+            'rows': rows,
+            'total': len(data)
+        }
     
     @staticmethod
-    def generate_metrics(data, metrics_config):
-        """Génère des cartes de métriques"""
-        if isinstance(data, pd.DataFrame) and not data.empty:
+    def _apply_transforms(data, transforms):
+        """Appliquer des transformations aux données"""
+        result = data.copy()
+        
+        for transform in transforms:
+            transform_type = transform.get('type')
+            
+            if transform_type == 'sort':
+                columns = transform.get('columns', [])
+                ascending = transform.get('ascending', True)
+                if columns:
+                    result = result.sort_values(by=columns, ascending=ascending)
+            
+            elif transform_type == 'filter':
+                column = transform.get('column')
+                operator = transform.get('operator', 'eq')
+                value = transform.get('value')
+                
+                if column in result.columns:
+                    if operator == 'eq':
+                        result = result[result[column] == value]
+                    elif operator == 'gt':
+                        result = result[result[column] > value]
+                    elif operator == 'lt':
+                        result = result[result[column] < value]
+                    elif operator == 'contains':
+                        result = result[result[column].astype(str).str.contains(value, na=False)]
+            
+            elif transform_type == 'aggregate':
+                group_by = transform.get('group_by', [])
+                aggregations = transform.get('aggregations', {})
+                
+                if group_by and aggregations:
+                    result = result.groupby(group_by).agg(aggregations).reset_index()
+            
+            elif transform_type == 'rename':
+                rename_map = transform.get('mapping', {})
+                result = result.rename(columns=rename_map)
+        
+        return result
+    
+    @staticmethod
+    def generate_metric(data, metric_config):
+        """Générer une métrique/KPI"""
+        if data.empty:
             return {
-                'value': data.iloc[0, 0] if len(data.columns) > 0 else 0,
-                'change': data.iloc[0, 1] if len(data.columns) > 1 else None,
-                'trend': 'up' if (len(data.columns) > 1 and data.iloc[0, 1] > 0) else 'down'
+                'value': 0,
+                'change': None,
+                'trend': 'neutral',
+                'status': 'unknown'
             }
-        return {'value': 0, 'change': None, 'trend': 'neutral'}
+        
+        try:
+            value_col = metric_config.get('value_column', data.columns[0])
+            change_col = metric_config.get('change_column')
+            target_col = metric_config.get('target_column')
+            
+            value = float(data.iloc[0][value_col]) if value_col in data.columns else float(data.iloc[0, 0])
+            
+            # Calculer le changement
+            change = None
+            if change_col and change_col in data.columns:
+                change_val = float(data.iloc[0][change_col])
+                change = f"{'+' if change_val > 0 else ''}{change_val:.1f}"
+            
+            # Déterminer la tendance
+            trend = 'neutral'
+            if change_col and change_col in data.columns:
+                change_val = float(data.iloc[0][change_col])
+                if change_val > 0:
+                    trend = 'up'
+                elif change_val < 0:
+                    trend = 'down'
+            
+            # Vérifier par rapport à la cible
+            status = 'neutral'
+            if target_col and target_col in data.columns:
+                target = float(data.iloc[0][target_col])
+                if value >= target:
+                    status = 'good'
+                elif value >= target * 0.8:
+                    status = 'warning'
+                else:
+                    status = 'critical'
+            
+            # Formater la valeur
+            format_type = metric_config.get('format', 'number')
+            if format_type == 'currency':
+                formatted_value = f"${value:,.2f}"
+            elif format_type == 'percentage':
+                formatted_value = f"{value:.1f}%"
+            elif format_type == 'number':
+                formatted_value = f"{value:,.0f}"
+            else:
+                formatted_value = str(value)
+            
+            return {
+                'value': formatted_value,
+                'raw_value': value,
+                'change': change,
+                'trend': trend,
+                'status': status,
+                'target': float(data.iloc[0][target_col]) if target_col in data.columns else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Erreur génération métrique: {e}")
+            return {
+                'value': 'N/A',
+                'change': None,
+                'trend': 'neutral',
+                'status': 'error'
+            }
 
-# ============================================
-# 4. ROUTES API PRINCIPALES
-# ============================================
-@app.route('/')
-def index():
-    """Serveur de l'application front-end"""
-    return send_from_directory('static', 'index.html')
+# ==================== GESTION DES CONFIGURATIONS ====================
 
-@app.route('/api/configurations', methods=['GET'])
-def get_configurations():
-    """Récupère toutes les configurations disponibles"""
-    config_types = ['analytics', 'userData', 'systemMetrics', 'salesData']
-    configs = {}
-    
-    for config_type in config_types:
-        config = ConfigurationManager.load_config(config_type)
-        if config:
-            configs[config_type] = config
-    
-    return jsonify(configs)
-
-@app.route('/api/page-configs', methods=['GET'])
-def get_page_configs():
-    """Récupère les configurations de pages"""
-    page_configs = {}
-    
-    # Charger toutes les configurations de pages
-    if os.path.exists(CONFIG_DIR):
-        for file in os.listdir(CONFIG_DIR):
-            if file.endswith('.json'):
-                with open(os.path.join(CONFIG_DIR, file), 'r') as f:
-                    page_configs[file] = json.load(f)
-    
-    return jsonify(page_configs)
-
-@app.route('/api/generate-page', methods=['POST'])
-def generate_page():
-    """Génère une page complète basée sur la configuration"""
+def load_config():
+    """Charger la configuration globale"""
     try:
-        page_request = request.json
-        
-        # 1. Valider la configuration
-        if not page_request.get('config'):
-            return jsonify({'error': 'Configuration manquante'}), 400
-        
-        # 2. Extraire la configuration
-        config = page_request['config']
-        selections = page_request.get('selections', {})
-        
-        # 3. Initialiser les exécuteurs
-        query_executor = QueryExecutor()
-        viz_generator = VisualizationGenerator()
-        
-        # 4. Traiter chaque composant
-        components = []
-        
-        if 'components' in config:
-            for component_config in config['components']:
-                component_result = process_component(
-                    component_config, 
-                    selections, 
-                    query_executor, 
-                    viz_generator
-                )
-                components.append(component_result)
-        
-        # 5. Créer la réponse
-        page_id = str(uuid.uuid4())
-        response = {
-            'page_id': page_id,
-            'title': config.get('title', 'Dashboard'),
-            'timestamp': datetime.now().isoformat(),
-            'components': components,
-            'metadata': {
-                'config_type': config.get('type'),
-                'selections': selections
-            }
-        }
-        
-        # 6. Sauvegarder la page générée (optionnel)
-        if page_request.get('save', True):
-            save_path = f"generated_pages/{page_id}.json"
-            os.makedirs('generated_pages', exist_ok=True)
-            with open(save_path, 'w') as f:
-                json.dump(response, f, indent=2)
-        
-        return jsonify(response)
-        
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Erreur chargement config: {e}")
+        return {}
 
-def process_component(component_config, selections, query_executor, viz_generator):
-    """Traite un composant individuel"""
-    component_type = component_config.get('type', 'table')
+def load_page_config(page_config_file):
+    """Charger la configuration d'une page spécifique"""
+    try:
+        page_path = os.path.join(PAGE_CONFIGS_DIR, page_config_file)
+        if os.path.exists(page_path):
+            with open(page_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return None
+    except Exception as e:
+        logger.error(f"Erreur chargement page config {page_config_file}: {e}")
+        return None
+
+def save_generated_page(page_data):
+    """Sauvegarder une page générée"""
+    try:
+        os.makedirs(GENERATED_PAGES_DIR, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        page_id = page_data.get('id', str(uuid.uuid4()))
+        filename = f"{timestamp}_{page_id}.json"
+        filepath = os.path.join(GENERATED_PAGES_DIR, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(page_data, f, indent=2, ensure_ascii=False)
+        
+        return filename
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde page: {e}")
+        return None
+
+def list_generated_pages():
+    """Lister toutes les pages générées"""
+    try:
+        if not os.path.exists(GENERATED_PAGES_DIR):
+            return []
+        
+        pages = []
+        for filename in os.listdir(GENERATED_PAGES_DIR):
+            if filename.endswith('.json'):
+                filepath = os.path.join(GENERATED_PAGES_DIR, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        page_data = json.load(f)
+                    
+                    pages.append({
+                        'id': page_data.get('id', filename.replace('.json', '')),
+                        'filename': filename,
+                        'name': page_data.get('name', page_data.get('title', 'Unnamed Page')),
+                        'type': page_data.get('type', 'dashboard'),
+                        'source_config': page_data.get('source_config', 'unknown'),
+                        'generated_at': page_data.get('generated_at', ''),
+                        'components_count': len(page_data.get('components', []))
+                    })
+                except Exception as e:
+                    logger.error(f"Erreur lecture page {filename}: {e}")
+        
+        pages.sort(key=lambda x: x.get('generated_at', ''), reverse=True)
+        return pages
+    except Exception as e:
+        logger.error(f"Erreur listing pages: {e}")
+        return []
+
+def check_page_requirements(page_info, selections):
+    """Vérifier si les sélections satisfont les prérequis de la page"""
+    try:
+        requirements = page_info.get('requirements', {})
+        
+        for level, required_values in requirements.items():
+            if level not in selections:
+                return False
+            
+            level_selections = selections[level]
+            
+            if isinstance(level_selections, dict):
+                for key, value in level_selections.items():
+                    if isinstance(value, list):
+                        if not any(req in value for req in required_values):
+                            return False
+                    else:
+                        if value not in required_values:
+                            return False
+            elif isinstance(level_selections, list):
+                if not any(req in level_selections for req in required_values):
+                    return False
+            else:
+                if level_selections not in required_values:
+                    return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"Erreur vérification prérequis: {e}")
+        return False
+
+def apply_selections_to_query(query, selections):
+    """Appliquer les sélections à une requête"""
+    result = query
+    
+    for level_key, level_data in selections.items():
+        if isinstance(level_data, dict):
+            for field, value in level_data.items():
+                placeholder = f"${{{level_key}.{field}}}"
+                if isinstance(value, list):
+                    value_str = ", ".join([f"'{v}'" for v in value])
+                    result = result.replace(placeholder, value_str)
+                else:
+                    result = result.replace(placeholder, str(value))
+        elif isinstance(level_data, list):
+            placeholder = f"${{{level_key}}}"
+            value_str = ", ".join([f"'{v}'" for v in level_data])
+            result = result.replace(placeholder, value_str)
+        else:
+            placeholder = f"${{{level_key}}}"
+            result = result.replace(placeholder, str(level_data))
+    
+    return result
+
+def process_visualization(viz_config, selections):
+    """Traiter une visualisation individuelle"""
+    viz_type = viz_config.get('type', 'table')
     
     # Préparer les paramètres
     params = {}
-    if 'params' in component_config:
-        for param_name, param_value in component_config['params'].items():
-            # Remplacer les sélections
+    if 'params' in viz_config:
+        for param_name, param_value in viz_config['params'].items():
             if isinstance(param_value, str) and param_value.startswith('${'):
                 selection_key = param_value[2:-1]
                 params[param_name] = selections.get(selection_key, param_value)
@@ -390,191 +638,240 @@ def process_component(component_config, selections, query_executor, viz_generato
                 params[param_name] = param_value
     
     # Récupérer les données
-    data = None
-    if 'data' in component_config:
-        data = query_executor.execute(component_config['data'], params)
+    data = pd.DataFrame()
+    if 'data' in viz_config:
+        # Appliquer les sélections à la requête si c'est SQL
+        if viz_config['data'].get('type') == 'sql' and 'query' in viz_config['data']:
+            query = viz_config['data']['query']
+            viz_config['data']['query'] = apply_selections_to_query(query, selections)
+        
+        data = QueryExecutor.execute(viz_config['data'], params)
     
     # Générer la visualisation
     result = {
-        'id': component_config.get('id', str(uuid.uuid4())),
-        'type': component_type,
-        'title': component_config.get('title', ''),
-        'config': component_config
+        'id': str(uuid.uuid4()),
+        'type': viz_type,
+        'title': viz_config.get('title', 'Visualization'),
+        'config': viz_config
     }
     
-    if data is not None:
-        if component_type == 'chart':
-            result['chart'] = viz_generator.generate_chart(data, component_config)
-        elif component_type == 'table':
-            result['table'] = viz_generator.generate_table(data, component_config)
-        elif component_type == 'metric':
-            result['metric'] = viz_generator.generate_metrics(data, component_config)
-        elif component_type == 'custom':
-            result['custom'] = data.to_dict('records') if isinstance(data, pd.DataFrame) else data
+    if not data.empty:
+        if viz_type == 'chart':
+            result['chart'] = VisualizationGenerator.generate_chart(data, viz_config)
+        elif viz_type == 'table':
+            result['table'] = VisualizationGenerator.generate_table(data, viz_config)
+        elif viz_type == 'metric':
+            result['metric'] = VisualizationGenerator.generate_metric(data, viz_config)
+        elif viz_type == 'custom':
+            result['data'] = data.to_dict('records')
     
     return result
 
-@app.route('/api/export/<format_type>', methods=['POST'])
-def export_data(format_type):
-    """Exporte des données dans différents formats"""
+# ==================== ROUTES API ====================
+
+@app.route('/')
+def index():
+    """Servir l'application front-end"""
+    return send_from_directory('static', 'index.html')
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Obtenir la configuration globale"""
+    config = load_config()
+    return jsonify(config)
+
+@app.route('/api/pages/<config_type>', methods=['GET'])
+def get_pages_for_config(config_type):
+    """Obtenir les pages disponibles pour un type de configuration"""
+    config = load_config()
+    
+    if config_type not in config:
+        return jsonify([])
+    
+    pages = config[config_type].get('pageConfigs', [])
+    return jsonify(pages)
+
+@app.route('/api/generate', methods=['POST'])
+def generate_pages():
+    """Générer les pages sélectionnées avec données dynamiques"""
     try:
-        data = request.json.get('data')
+        data = request.json
+        config_type = data.get('configType')
+        selections = data.get('selections', {})
+        selected_page_ids = data.get('selectedPages', [])
         
-        if format_type == 'csv':
-            df = pd.DataFrame(data)
-            output = io.StringIO()
-            df.to_csv(output, index=False)
-            output.seek(0)
+        if not config_type:
+            return jsonify({'error': 'Type de configuration requis'}), 400
+        
+        config = load_config()
+        if config_type not in config:
+            return jsonify({'error': 'Type de configuration invalide'}), 400
+        
+        generated_pages = []
+        
+        # Obtenir toutes les configurations de pages pour ce type
+        page_configs = config[config_type].get('pageConfigs', [])
+        
+        for page_info in page_configs:
+            page_id = page_info.get('id')
             
-            return jsonify({
-                'content': output.getvalue(),
-                'filename': f'export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            # Ignorer si non sélectionné
+            if page_id not in selected_page_ids:
+                continue
+            
+            # Vérifier les prérequis
+            if not check_page_requirements(page_info, selections):
+                logger.warning(f"Prérequis non satisfaits pour {page_id}")
+                continue
+            
+            # Charger la configuration de la page
+            page_config_file = page_info.get('pageConfig')
+            page_config = load_page_config(page_config_file)
+            
+            if not page_config:
+                logger.warning(f"Configuration page {page_config_file} non trouvée")
+                continue
+            
+            # Traiter les visualisations
+            components = []
+            if 'visualizations' in page_config:
+                for viz_config in page_config['visualizations']:
+                    component = process_visualization(viz_config, selections)
+                    components.append(component)
+            
+            # Créer la réponse de la page
+            page_response = {
+                'id': str(uuid.uuid4()),
+                'type': page_config.get('type', 'dashboard'),
+                'title': page_info.get('name', page_config.get('title', 'Generated Page')),
+                'template': config_type,
+                'config_id': page_id,
+                'generated_at': datetime.now().isoformat(),
+                'selections': selections,
+                'components': components,
+                'metadata': {
+                    'config_type': config_type,
+                    'page_config': page_config_file,
+                    'generation_time': datetime.now().isoformat()
+                }
+            }
+            
+            # Sauvegarder la page générée
+            filename = save_generated_page(page_response)
+            if filename:
+                page_response['filename'] = filename
+            
+            generated_pages.append({
+                'id': page_response['id'],
+                'name': page_info.get('name', 'Unnamed Page'),
+                'generated_page': page_response
             })
         
-        elif format_type == 'json':
-            return jsonify({
-                'content': json.dumps(data, indent=2),
-                'filename': f'export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
-            })
-        
-        elif format_type == 'excel':
-            df = pd.DataFrame(data)
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False, sheet_name='Data')
-            output.seek(0)
-            
-            # Encoder en base64 pour le transfert
-            encoded = base64.b64encode(output.getvalue()).decode('utf-8')
-            
-            return jsonify({
-                'content': encoded,
-                'filename': f'export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx',
-                'encoded': True
-            })
-        
-        else:
-            return jsonify({'error': f'Format non supporté: {format_type}'}), 400
+        return jsonify({
+            'success': True,
+            'generated_count': len(generated_pages),
+            'pages': generated_pages
+        })
         
     except Exception as e:
+        logger.error(f"Erreur génération: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generated-pages', methods=['GET'])
+def get_generated_pages():
+    """Obtenir la liste de toutes les pages générées"""
+    pages = list_generated_pages()
+    return jsonify({'pages': pages})
+
+@app.route('/api/generated-pages/<page_id>', methods=['GET'])
+def get_generated_page(page_id):
+    """Obtenir une page générée spécifique"""
+    try:
+        for filename in os.listdir(GENERATED_PAGES_DIR):
+            if filename.endswith('.json') and page_id in filename:
+                filepath = os.path.join(GENERATED_PAGES_DIR, filename)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    page_data = json.load(f)
+                return jsonify(page_data)
+        
+        return jsonify({'error': 'Page non trouvée'}), 404
+    except Exception as e:
+        logger.error(f"Erreur obtention page {page_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Endpoint de vérification de santé"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
-    })
-
-# ============================================
-# 5. ROUTES D'ADMINISTRATION
-# ============================================
-@app.route('/admin/configs', methods=['GET'])
-def list_configs():
-    """Liste toutes les configurations disponibles"""
-    configs = []
-    
-    if os.path.exists('configs'):
-        for file in os.listdir('configs'):
-            if file.endswith('.json'):
-                configs.append({
-                    'name': file.replace('.json', ''),
-                    'path': f'configs/{file}',
-                    'size': os.path.getsize(f'configs/{file}')
-                })
-    
-    return jsonify(configs)
-
-@app.route('/admin/configs/<config_type>', methods=['PUT'])
-def update_config(config_type):
-    """Met à jour une configuration"""
+    """Vérification de santé de l'API"""
     try:
-        config_data = request.json
+        # Tester la connexion à la base de données
+        conn = DatabaseManager.get_connection()
+        db_status = 'connected' if conn else 'disconnected'
+        if conn:
+            conn.close()
         
-        config_path = f"configs/{config_type}.json"
-        os.makedirs('configs', exist_ok=True)
-        
-        with open(config_path, 'w') as f:
-            json.dump(config_data, f, indent=2)
-        
-        return jsonify({'success': True, 'message': f'Configuration {config_type} mise à jour'})
-    
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'version': '2.1.0',
+            'database': db_status,
+            'config_loaded': len(load_config()) > 0,
+            'page_configs_count': len(os.listdir(PAGE_CONFIGS_DIR)) if os.path.exists(PAGE_CONFIGS_DIR) else 0,
+            'generated_pages_count': len(os.listdir(GENERATED_PAGES_DIR)) if os.path.exists(GENERATED_PAGES_DIR) else 0
+        })
     except Exception as e:
+        logger.error(f"Erreur health check: {e}")
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+@app.route('/api/test-query', methods=['POST'])
+def test_query():
+    """Tester une requête SQL"""
+    try:
+        data = request.json
+        query = data.get('query', '')
+        
+        if not query:
+            return jsonify({'error': 'Requête vide'}), 400
+        
+        df = DatabaseManager.execute_query(query)
+        
+        return jsonify({
+            'success': True,
+            'row_count': len(df),
+            'columns': df.columns.tolist(),
+            'sample_data': df.head(10).to_dict('records'),
+            'query_executed': query
+        })
+    except Exception as e:
+        logger.error(f"Erreur test requête: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ============================================
-# 6. STRUCTURE DE DOSSIERS
-# ============================================
-"""
-L'application devrait avoir cette structure :
+# ==================== INITIALISATION ====================
 
-app/
-├── app.py                    # Ce fichier
-├── configs/                  # Configurations globales
-│   ├── analytics.json
-│   ├── userData.json
-│   └── ...
-├── page_configs/            # Configurations de pages
-│   ├── analytics_performance_summary.json
-│   └── ...
-├── data_functions.py        # Fonctions Python personnalisées
-├── generated_pages/         # Pages générées (optionnel)
-├── static/                  # Front-end
-│   └── index.html          # Version modifiée du front-end
-├── templates/               # Templates HTML (optionnel)
-└── requirements.txt
-"""
-
-# ============================================
-# EXEMPLE DE CONFIGURATION (analytics.json)
-# ============================================
-"""
-{
-  "type": "analytics",
-  "title": "Performance Analysis",
-  "description": "Configure performance analysis settings",
-  "fontSize": "15px",
-  "levels": {
-    "level1": {
-      "title": "Analysis Type",
-      "type": "dropdown",
-      "id": "analysisType",
-      "label": "Select analysis type",
-      "values": ["Web Performance", "User Engagement"],
-      "mandatory": true
-    }
-  },
-  "components": [
-    {
-      "type": "chart",
-      "title": "Performance Chart",
-      "data": {
-        "type": "sql",
-        "query": "SELECT date, value FROM metrics WHERE type = '${analysisType}'",
-        "connection": "default"
-      },
-      "chart_type": "line",
-      "layout": {
-        "title": "Performance Over Time",
-        "xaxis_title": "Date",
-        "yaxis_title": "Value"
-      }
-    }
-  ]
-}
-"""
+def initialize_directories():
+    """Créer les répertoires nécessaires"""
+    directories = [PAGE_CONFIGS_DIR, GENERATED_PAGES_DIR, 'static']
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
 
 if __name__ == '__main__':
-    # Créer les répertoires nécessaires
-    os.makedirs('configs', exist_ok=True)
-    os.makedirs('page_configs', exist_ok=True)
-    os.makedirs('static', exist_ok=True)
+    initialize_directories()
     
-    print("🚀 Serveur JSON-Driven démarré !")
-    print("📊 Accédez à l'interface: http://localhost:5000")
-    print("🔧 API Health: http://localhost:5000/api/health")
-    print("📋 Configurations: http://localhost:5000/api/configurations")
+    print("=" * 70)
+    print("🚀 JSON-Driven Dashboard Generator avec PostgreSQL")
+    print("=" * 70)
+    print(f"📁 Configuration: {CONFIG_FILE}")
+    print(f"📄 Pages Configs: {PAGE_CONFIGS_DIR}/")
+    print(f"💾 Pages Générées: {GENERATED_PAGES_DIR}/")
+    print(f"🗄️  Base de données: {DB_CONFIG['database']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}")
+    print(f"🌐 Interface: http://localhost:5000")
+    print(f"🔧 API Health: http://localhost:5000/api/health")
+    print("=" * 70)
+    print("📋 Endpoints API:")
+    print("  • GET  /api/config              - Configuration globale")
+    print("  • GET  /api/pages/<type>        - Pages par type")
+    print("  • POST /api/generate            - Générer pages avec données DB")
+    print("  • GET  /api/generated-pages     - Pages générées")
+    print("  • POST /api/test-query          - Tester une requête SQL")
+    print("=" * 70)
     
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000, host='0.0.0.0')
