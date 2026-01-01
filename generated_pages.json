@@ -1,0 +1,262 @@
+{
+  "page_id": "portfolio_dashboard_v2",
+  "title": "Dashboard Portefeuille Avancé",
+  "description": "Dashboard interactif avec actions configurables",
+  "layout": "vertical",
+  "refresh_interval": 300,
+  "metadata": {
+    "author": "Analytics Team",
+    "version": "2.0",
+    "created": "2024-01-15",
+    "data_source": "PostgreSQL"
+  },
+  "global_actions": {
+    "refresh": {
+      "enabled": true,
+      "interval": 300,
+      "label": "🔄 Rafraîchir tout",
+      "endpoint": "/api/refresh-all"
+    },
+    "export": {
+      "enabled": true,
+      "formats": ["pdf", "html"],
+      "label": "📥 Exporter la page"
+    },
+    "screenshot": {
+      "enabled": true,
+      "label": "📸 Capture d'écran"
+    }
+  },
+  "sections": [
+    {
+      "title": "Vue d'Ensemble",
+      "layout": "2-columns",
+      "components": [
+        {
+          "type": "table",
+          "title": "Top 10 Portefeuilles",
+          "style": {
+            "height": "400px",
+            "borderColor": "#007348"
+          },
+          "data": {
+            "type": "sql",
+            "query": """
+              SELECT 
+                p.id,
+                p.nom as "Portefeuille",
+                c.nom as "Client",
+                p.valeur_total as "Valeur (€)",
+                p.performance as "Performance (%)",
+                p.risque as "Niveau de Risque",
+                p.date_maj as "Dernière MAJ"
+              FROM portefeuilles p
+              JOIN clients c ON p.client_id = c.id
+              WHERE p.actif = TRUE
+              ORDER BY p.valeur_total DESC
+              LIMIT 10
+            """,
+            "params": {}
+          },
+          "config": {
+            "columns": ["Portefeuille", "Client", "Valeur (€)", "Performance (%)", "Niveau de Risque"],
+            "transform": [
+              {
+                "type": "sort",
+                "columns": ["Valeur (€)"],
+                "ascending": false
+              }
+            ]
+          },
+          "actions": {
+            "refresh": {
+              "enabled": true,
+              "interval": 60,
+              "label": "🔄",
+              "tooltip": "Rafraîchir les données"
+            },
+            "export": {
+              "enabled": true,
+              "formats": ["csv", "excel", "json"],
+              "label": "📥",
+              "tooltip": "Exporter les données"
+            },
+            "filter": {
+              "enabled": true,
+              "options": [
+                {"label": "Tous", "value": "all"},
+                {"label": "Risque Élevé", "value": "high"},
+                {"label": "Risque Moyen", "value": "medium"},
+                {"label": "Risque Faible", "value": "low"}
+              ],
+              "label": "🔍",
+              "tooltip": "Filtrer par risque"
+            }
+          }
+        },
+        {
+          "type": "chart",
+          "title": "Distribution par Type d'Investissement",
+          "chart_type": "pie",
+          "style": {
+            "height": "400px"
+          },
+          "data": {
+            "type": "sql",
+            "query": """
+              SELECT 
+                i.type as "Type",
+                SUM(p.valeur_total) as "Valeur Totale"
+              FROM portefeuilles p
+              JOIN investissements i ON p.investissement_id = i.id
+              GROUP BY i.type
+              ORDER BY "Valeur Totale" DESC
+            """
+          },
+          "chart_config": {
+            "labels_column": "Type",
+            "values_column": "Valeur Totale",
+            "layout": {
+              "title": "Répartition des Investissements",
+              "showlegend": true
+            }
+          },
+          "actions": {
+            "refresh": {
+              "enabled": true,
+              "interval": 120,
+              "label": "🔄"
+            },
+            "export": {
+              "enabled": true,
+              "formats": ["png", "svg", "pdf"],
+              "label": "💾",
+              "tooltip": "Télécharger l'image"
+            },
+            "toggle": {
+              "enabled": true,
+              "options": ["pie", "bar", "donut"],
+              "label": "📊",
+              "tooltip": "Changer le type de graphique"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Analyses Avancées",
+      "layout": "full",
+      "components": [
+        {
+          "type": "chart",
+          "title": "Évolution des Performances",
+          "chart_type": "line",
+          "data": {
+            "type": "sql",
+            "query": """
+              SELECT 
+                date_trunc('month', ph.date) as "Mois",
+                AVG(ph.performance) as "Performance Moyenne",
+                MIN(ph.performance) as "Performance Min",
+                MAX(ph.performance) as "Performance Max"
+              FROM portefeuille_historique ph
+              WHERE ph.date >= NOW() - INTERVAL '1 year'
+              GROUP BY date_trunc('month', ph.date)
+              ORDER BY "Mois"
+            """
+          },
+          "chart_config": {
+            "x_column": "Mois",
+            "y_column": "Performance Moyenne",
+            "layout": {
+              "title": "Performance Mensuelle Moyenne",
+              "xaxis_title": "Mois",
+              "yaxis_title": "Performance (%)",
+              "showlegend": true
+            }
+          },
+          "actions": {
+            "refresh": {
+              "enabled": true,
+              "label": "Actualiser"
+            },
+            "screenshot": {
+              "enabled": true,
+              "label": "📸",
+              "tooltip": "Capture du graphique"
+            },
+            "zoom": {
+              "enabled": true,
+              "label": "🔍",
+              "tooltip": "Mode zoom"
+            }
+          }
+        },
+        {
+          "type": "custom",
+          "title": "Calculateur de ROI",
+          "component": "roi_calculator",
+          "data": {
+            "type": "function",
+            "function": "calculate_roi_parameters",
+            "params": {
+              "currency": "EUR",
+              "period": "annual"
+            }
+          },
+          "actions": {
+            "calculate": {
+              "enabled": true,
+              "label": "🧮 Calculer",
+              "endpoint": "/api/calculate-roi"
+            },
+            "save": {
+              "enabled": true,
+              "label": "💾 Sauvegarder"
+            },
+            "share": {
+              "enabled": true,
+              "label": "📤 Partager"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Alertes et Notifications",
+      "layout": "grid",
+      "components": [
+        {
+          "type": "metric",
+          "title": "Portefeuilles à Surveiller",
+          "data": {
+            "type": "sql",
+            "query": """
+              SELECT COUNT(*) as count
+              FROM portefeuilles
+              WHERE performance < -5 
+                AND date_maj >= NOW() - INTERVAL '7 days'
+            """
+          },
+          "config": {
+            "format": "number",
+            "color": "#ff4444",
+            "icon": "⚠️"
+          },
+          "actions": {
+            "notify": {
+              "enabled": true,
+              "label": "🔔 Notifier",
+              "channel": ["email", "slack"]
+            },
+            "details": {
+              "enabled": true,
+              "label": "📋 Détails",
+              "modal": "alert_details"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
