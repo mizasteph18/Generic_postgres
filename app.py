@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# ==================== CLASSES DE L'ANCIENNE VERSION ====================
+# ==================== CLASSES ====================
 
 class DatabaseManager:
     """Gestionnaire de connexion PostgreSQL"""
@@ -428,10 +428,11 @@ class VisualizationGenerator:
         """Générer une métrique/KPI"""
         if data.empty:
             return {
-                'value': 0,
+                'value': 'N/A',
                 'change': None,
                 'trend': 'neutral',
-                'status': 'unknown'
+                'status': 'unknown',
+                'target': None
             }
         
         try:
@@ -439,18 +440,19 @@ class VisualizationGenerator:
             change_col = metric_config.get('change_column')
             target_col = metric_config.get('target_column')
             
-            value = float(data.iloc[0][value_col]) if value_col in data.columns else float(data.iloc[0, 0])
+            # Obtenir la valeur
+            if value_col in data.columns:
+                value = float(data.iloc[0][value_col])
+            else:
+                value = float(data.iloc[0, 0])
             
             # Calculer le changement
             change = None
-            if change_col and change_col in data.columns:
-                change_val = float(data.iloc[0][change_col])
-                change = f"{'+' if change_val > 0 else ''}{change_val:.1f}"
-            
-            # Déterminer la tendance
             trend = 'neutral'
             if change_col and change_col in data.columns:
                 change_val = float(data.iloc[0][change_col])
+                change = f"{'+' if change_val > 0 else ''}{change_val:.1f}%"
+                
                 if change_val > 0:
                     trend = 'up'
                 elif change_val < 0:
@@ -458,6 +460,7 @@ class VisualizationGenerator:
             
             # Vérifier par rapport à la cible
             status = 'neutral'
+            target = None
             if target_col and target_col in data.columns:
                 target = float(data.iloc[0][target_col])
                 if value >= target:
@@ -484,7 +487,7 @@ class VisualizationGenerator:
                 'change': change,
                 'trend': trend,
                 'status': status,
-                'target': float(data.iloc[0][target_col]) if target_col in data.columns else None
+                'target': target
             }
             
         except Exception as e:
@@ -493,7 +496,8 @@ class VisualizationGenerator:
                 'value': 'N/A',
                 'change': None,
                 'trend': 'neutral',
-                'status': 'error'
+                'status': 'error',
+                'target': None
             }
 
 # ==================== GESTION DES CONFIGURATIONS ====================
@@ -556,7 +560,7 @@ def list_generated_pages():
                         'filename': filename,
                         'name': page_data.get('name', page_data.get('title', 'Unnamed Page')),
                         'type': page_data.get('type', 'dashboard'),
-                        'source_config': page_data.get('source_config', 'unknown'),
+                        'source_config': page_data.get('metadata', {}).get('config_type', 'unknown'),
                         'generated_at': page_data.get('generated_at', ''),
                         'components_count': len(page_data.get('components', []))
                     })
@@ -570,100 +574,119 @@ def list_generated_pages():
         return []
 
 def check_page_requirements(page_info, selections):
-    """Vérifier si les sélections satisfont les prérequis de la page"""
+    """Vérifier si les sélections satisfont les prérequis de la page - VERSION AMÉLIORÉE"""
     try:
         requirements = page_info.get('requirements', {})
         
-        for level, required_values in requirements.items():
+        # Pour chaque niveau requis
+        for level, required_value in requirements.items():
             if level not in selections:
                 return False
             
-            level_selections = selections[level]
+            level_selection = selections[level]
             
-            if isinstance(level_selections, dict):
-                for key, value in level_selections.items():
-                    if isinstance(value, list):
-                        if not any(req in value for req in required_values):
-                            return False
-                    else:
-                        if value not in required_values:
-                            return False
-            elif isinstance(level_selections, list):
-                if not any(req in level_selections for req in required_values):
-                    return False
-            else:
-                if level_selections not in required_values:
-                    return False
+            # Si la sélection correspond à la valeur requise
+            if level_selection != required_value:
+                return False
         
         return True
     except Exception as e:
         logger.error(f"Erreur vérification prérequis: {e}")
         return False
 
-def apply_selections_to_query(query, selections):
-    """Appliquer les sélections à une requête"""
-    result = query
+def create_default_page_config(page_info):
+    """Créer une configuration de page par défaut si le fichier n'existe pas"""
+    report_name = page_info.get('metadata', {}).get('reportName', '')
     
-    for level_key, level_data in selections.items():
-        if isinstance(level_data, dict):
-            for field, value in level_data.items():
-                placeholder = f"${{{level_key}.{field}}}"
-                if isinstance(value, list):
-                    value_str = ", ".join([f"'{v}'" for v in value])
-                    result = result.replace(placeholder, value_str)
-                else:
-                    result = result.replace(placeholder, str(value))
-        elif isinstance(level_data, list):
-            placeholder = f"${{{level_key}}}"
-            value_str = ", ".join([f"'{v}'" for v in level_data])
-            result = result.replace(placeholder, value_str)
-        else:
-            placeholder = f"${{{level_key}}}"
-            result = result.replace(placeholder, str(level_data))
-    
-    return result
+    return {
+        "type": "dashboard",
+        "title": page_info.get('name', 'Default Dashboard'),
+        "description": f"Generated dashboard for {report_name}",
+        "visualizations": [
+            {
+                "type": "metric",
+                "title": "Sample Performance Metric",
+                "data": {
+                    "type": "static",
+                    "data": {
+                        "value": 125.5,
+                        "change": "+12.5",
+                        "target": 120
+                    }
+                },
+                "config": {
+                    "value_column": "value",
+                    "change_column": "change",
+                    "target_column": "target",
+                    "format": "number"
+                }
+            },
+            {
+                "type": "table",
+                "title": "Sample Data Table",
+                "data": {
+                    "type": "static",
+                    "data": {
+                        "columns": ["Category", "Value", "Change"],
+                        "rows": [
+                            ["Category A", "100", "+5%"],
+                            ["Category B", "150", "+10%"],
+                            ["Category C", "75", "-2%"]
+                        ]
+                    }
+                },
+                "config": {
+                    "format": {
+                        "Value": "number",
+                        "Change": "percentage"
+                    }
+                }
+            }
+        ]
+    }
 
-def process_visualization(viz_config, selections):
-    """Traiter une visualisation individuelle"""
+def process_visualization(viz_config, all_params):
+    """Traiter une visualisation individuelle avec tous les paramètres"""
     viz_type = viz_config.get('type', 'table')
-    
-    # Préparer les paramètres
-    params = {}
-    if 'params' in viz_config:
-        for param_name, param_value in viz_config['params'].items():
-            if isinstance(param_value, str) and param_value.startswith('${'):
-                selection_key = param_value[2:-1]
-                params[param_name] = selections.get(selection_key, param_value)
-            else:
-                params[param_name] = param_value
     
     # Récupérer les données
     data = pd.DataFrame()
     if 'data' in viz_config:
-        # Appliquer les sélections à la requête si c'est SQL
-        if viz_config['data'].get('type') == 'sql' and 'query' in viz_config['data']:
-            query = viz_config['data']['query']
-            viz_config['data']['query'] = apply_selections_to_query(query, selections)
-        
-        data = QueryExecutor.execute(viz_config['data'], params)
+        data = QueryExecutor.execute(viz_config['data'], all_params)
     
     # Générer la visualisation
     result = {
         'id': str(uuid.uuid4()),
         'type': viz_type,
         'title': viz_config.get('title', 'Visualization'),
-        'config': viz_config
+        'config': viz_config.get('config', {})
     }
     
     if not data.empty:
         if viz_type == 'chart':
-            result['chart'] = VisualizationGenerator.generate_chart(data, viz_config)
+            result['chart'] = VisualizationGenerator.generate_chart(data, viz_config.get('config', {}))
         elif viz_type == 'table':
-            result['table'] = VisualizationGenerator.generate_table(data, viz_config)
+            result['table'] = VisualizationGenerator.generate_table(data, viz_config.get('config', {}))
         elif viz_type == 'metric':
-            result['metric'] = VisualizationGenerator.generate_metric(data, viz_config)
+            result['metric'] = VisualizationGenerator.generate_metric(data, viz_config.get('config', {}))
         elif viz_type == 'custom':
             result['data'] = data.to_dict('records')
+    else:
+        # Données d'exemple si vide
+        if viz_type == 'chart':
+            sample_data = QueryExecutor._get_sample_data({'chart_type': 'bar'})
+            result['chart'] = VisualizationGenerator.generate_chart(sample_data, viz_config.get('config', {}))
+        elif viz_type == 'table':
+            sample_data = QueryExecutor._get_sample_data({})
+            result['table'] = VisualizationGenerator.generate_table(sample_data, viz_config.get('config', {}))
+        elif viz_type == 'metric':
+            result['metric'] = {
+                'value': 'N/A',
+                'change': None,
+                'trend': 'neutral',
+                'status': 'unknown',
+                'target': None
+            }
     
     return result
 
@@ -676,9 +699,21 @@ def index():
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
-    """Obtenir la configuration globale"""
+    """Obtenir la configuration globale - FORMAT COMPATIBLE AVEC HTML"""
     config = load_config()
-    return jsonify(config)
+    
+    # Formater la configuration pour être compatible avec le frontend
+    formatted_config = {}
+    
+    for key, value in config.items():
+        formatted_config[key] = {
+            "title": value.get("title", key),
+            "description": value.get("description", ""),
+            "form": value.get("form", {"type": "dropdown", "label": "Select Category:"}),
+            "pageConfigs": value.get("pageConfigs", [])
+        }
+    
+    return jsonify(formatted_config)
 
 @app.route('/api/pages/<config_type>', methods=['GET'])
 def get_pages_for_config(config_type):
@@ -686,19 +721,20 @@ def get_pages_for_config(config_type):
     config = load_config()
     
     if config_type not in config:
-        return jsonify([])
+        return jsonify({"error": f"Configuration type '{config_type}' not found"}), 404
     
     pages = config[config_type].get('pageConfigs', [])
     return jsonify(pages)
 
 @app.route('/api/generate', methods=['POST'])
 def generate_pages():
-    """Générer les pages sélectionnées avec données dynamiques"""
+    """Générer les pages sélectionnées avec données dynamiques - VERSION AMÉLIORÉE"""
     try:
         data = request.json
         config_type = data.get('configType')
         selections = data.get('selections', {})
         selected_page_ids = data.get('selectedPages', [])
+        form_data = data.get('formData', {})
         
         if not config_type:
             return jsonify({'error': 'Type de configuration requis'}), 400
@@ -712,12 +748,11 @@ def generate_pages():
         # Obtenir toutes les configurations de pages pour ce type
         page_configs = config[config_type].get('pageConfigs', [])
         
-        for page_info in page_configs:
+        # Filtrer les pages sélectionnées
+        selected_pages = [p for p in page_configs if p.get('id') in selected_page_ids]
+        
+        for page_info in selected_pages:
             page_id = page_info.get('id')
-            
-            # Ignorer si non sélectionné
-            if page_id not in selected_page_ids:
-                continue
             
             # Vérifier les prérequis
             if not check_page_requirements(page_info, selections):
@@ -730,29 +765,37 @@ def generate_pages():
             
             if not page_config:
                 logger.warning(f"Configuration page {page_config_file} non trouvée")
-                continue
+                # Créer une page de base si le fichier n'existe pas
+                page_config = create_default_page_config(page_info)
+            
+            # Combiner tous les paramètres
+            all_params = {**selections, **form_data}
             
             # Traiter les visualisations
             components = []
             if 'visualizations' in page_config:
                 for viz_config in page_config['visualizations']:
-                    component = process_visualization(viz_config, selections)
+                    component = process_visualization(viz_config, all_params)
                     components.append(component)
             
             # Créer la réponse de la page
             page_response = {
                 'id': str(uuid.uuid4()),
+                'name': page_info.get('name', page_config.get('title', 'Generated Page')),
                 'type': page_config.get('type', 'dashboard'),
                 'title': page_info.get('name', page_config.get('title', 'Generated Page')),
                 'template': config_type,
                 'config_id': page_id,
                 'generated_at': datetime.now().isoformat(),
                 'selections': selections,
+                'form_data': form_data,
                 'components': components,
                 'metadata': {
                     'config_type': config_type,
                     'page_config': page_config_file,
-                    'generation_time': datetime.now().isoformat()
+                    'report_name': page_info.get('metadata', {}).get('reportName', ''),
+                    'generation_time': datetime.now().isoformat(),
+                    'description': page_info.get('metadata', {}).get('description', '')
                 }
             }
             
@@ -794,6 +837,15 @@ def get_generated_page(page_id):
                     page_data = json.load(f)
                 return jsonify(page_data)
         
+        # Chercher par nom aussi
+        for filename in os.listdir(GENERATED_PAGES_DIR):
+            if filename.endswith('.json'):
+                filepath = os.path.join(GENERATED_PAGES_DIR, filename)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    page_data = json.load(f)
+                if page_data.get('id') == page_id or page_data.get('config_id') == page_id:
+                    return jsonify(page_data)
+        
         return jsonify({'error': 'Page non trouvée'}), 404
     except Exception as e:
         logger.error(f"Erreur obtention page {page_id}: {e}")
@@ -809,12 +861,16 @@ def health_check():
         if conn:
             conn.close()
         
+        # Charger la configuration
+        config = load_config()
+        
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.now().isoformat(),
-            'version': '2.1.0',
+            'version': '3.0.0',
             'database': db_status,
-            'config_loaded': len(load_config()) > 0,
+            'config_loaded': len(config) > 0,
+            'config_categories': list(config.keys()),
             'page_configs_count': len(os.listdir(PAGE_CONFIGS_DIR)) if os.path.exists(PAGE_CONFIGS_DIR) else 0,
             'generated_pages_count': len(os.listdir(GENERATED_PAGES_DIR)) if os.path.exists(GENERATED_PAGES_DIR) else 0
         })
@@ -863,15 +919,16 @@ if __name__ == '__main__':
     print(f"📄 Pages Configs: {PAGE_CONFIGS_DIR}/")
     print(f"💾 Pages Générées: {GENERATED_PAGES_DIR}/")
     print(f"🗄️  Base de données: {DB_CONFIG['database']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}")
-    print(f"🌐 Interface: http://localhost:5000")
-    print(f"🔧 API Health: http://localhost:5000/api/health")
+    print(f"🌐 Interface: http://localhost:8080")
+    print(f"🔧 API Health: http://localhost:8080/api/health")
     print("=" * 70)
     print("📋 Endpoints API:")
     print("  • GET  /api/config              - Configuration globale")
-    print("  • GET  /api/pages/<type>        - Pages par type")
+    print("  • GET  /api/pages/<type>        - Pages par type de configuration")
     print("  • POST /api/generate            - Générer pages avec données DB")
     print("  • GET  /api/generated-pages     - Pages générées")
+    print("  • GET  /api/generated-pages/<id> - Page générée spécifique")
     print("  • POST /api/test-query          - Tester une requête SQL")
     print("=" * 70)
     
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    app.run(debug=True, port=8080, host='0.0.0.0')
