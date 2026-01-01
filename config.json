@@ -1,592 +1,316 @@
 {
-  "analytics": {
-    "title": "Performance Analysis",
-    "description": "Configure performance analysis settings",
-    "fontSize": "15px",
-    "pageTagField": "level4.timeRange",
+  "Sensitivity": {
+    "title": "Sensitivity",
+    "description": "Sensitivity reports",
+    "form": {
+      "type": "dropdown",
+      "label": "Select Category:"
+    },
     "pageConfigs": [
       {
-        "id": "analytics_performance_summary",
-        "name": "Performance Summary",
-        "description": "Affiche un résumé des performances web",
-        "pageConfig": "analytics_performance_summary.json",
+        "id": "Sensitivity_EQUI_1",
+        "name": "Equity",
+        "pageConfig": "EQ_dashboard.json",
         "requirements": {
-          "level2": ["Web Performance"],
-          "level3": ["loadTime", "bounceRate", "conversionRate"],
-          "level4": ["timeRange"]
-        }
-      },
-      {
-        "id": "analytics_detailed_metrics",
-        "name": "Detailed Metrics",
-        "description": "Affiche les métriques détaillées par composant",
-        "pageConfig": "analytics_detailed_metrics.json",
-        "requirements": {
-          "level2": ["Web Performance"],
-          "level3": ["loadTime"],
-          "level4": ["timeRange", "granularity"]
-        }
-      },
-      {
-        "id": "analytics_trends",
-        "name": "Performance Trends",
-        "description": "Affiche les tendances de performance sur 30 jours",
-        "pageConfig": "analytics_trends.json",
-        "requirements": {
-          "level2": ["Web Performance", "User Engagement"],
-          "level3": ["loadTime", "sessionDuration"],
-          "level4": ["timeRange"]
-        }
-      },
-      {
-        "id": "analytics_comparative",
-        "name": "Comparative Analysis",
-        "description": "Compare les performances entre périodes",
-        "pageConfig": "analytics_comparative.json",
-        "requirements": {
-          "level2": ["Web Performance"],
-          "level3": ["loadTime", "bounceRate", "conversionRate"],
-          "level4": ["timeRange", "granularity"]
-        }
-      }
-    ],
-    "levels": {
-      "level2": {
-        "title": "Analysis Type",
-        "type": "dropdown",
-        "id": "analysisType",
-        "label": "Select analysis type",
-        "values": ["Web Performance", "User Engagement", "Conversion", "Retention"],
-        "mandatory": true,
-        "nextLevels": {
-          "Web Performance": {
-            "level3": {
-              "title": "Web Metrics",
-              "type": "checkbox",
-              "id": "webMetrics",
-              "label": "Metrics to analyze",
-              "mandatory": true,
-              "options": [
-                {"label": "Loading time", "value": "loadTime"},
-                {"label": "Bounce rate", "value": "bounceRate"},
-                {"label": "Pages per session", "value": "pagesPerSession"},
-                {"label": "Session duration", "value": "sessionDuration"},
-                {"label": "Conversion rate", "value": "conversionRate"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Analysis Period",
-                    "controls": [
-                      {
-                        "type": "dropdown",
-                        "id": "timeRange",
-                        "label": "Time period",
-                        "values": ["Last 7 days", "Last 30 days", "Last quarter", "Last year", "Custom range"],
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "customDate",
-                        "label": "Custom date (YYYY-MM-DD)",
-                        "inputType": "date",
-                        "placeholder": "2024-01-15"
-                      },
-                      {
-                        "type": "dropdown",
-                        "id": "granularity",
-                        "label": "Data granularity",
-                        "values": ["Hourly", "Daily", "Weekly", "Monthly"],
-                        "mandatory": false
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
+          "Level1": "Sensitivity",
+          "Level2": "Equity"
+        },
+        "metadata": {
+          "tag": "[EQ]",
+          "description": "Equity instruments",
+          "reportName": "SENSI_EQ",
+          "generateReport": true,
+          "inputId": "EQ_INPUT",
+          "form": {
+            "title": "Parameters Configuration",
+            "fields": [
+              {
+                "name": "region",
+                "type": "checklist",
+                "label": "Select Regions:",
+                "required": false,
+                "tag": true,
+                "options": [
+                  "US",
+                  "Europe",
+                  "Asia",
+                  "EMEA"
+                ],
+                "default": [
+                  "US",
+                  "Europe"
+                ],
+                "validation": "min 1",
+                "description": "Geographic regions"
+              },
+              {
+                "name": "timeframe",
+                "type": "text",
+                "label": "Timeframe (days):",
+                "required": true,
+                "tag": false,
+                "placeholder": "Enter days",
+                "default": "30",
+                "validation": "number,min=1",
+                "description": "Analysis timeframe in days"
               }
-            }
-          },
-          "User Engagement": {
-            "level3": {
-              "title": "Engagement Metrics",
-              "type": "checkbox",
-              "id": "engagementMetrics",
-              "label": "Engagement indicators",
-              "mandatory": true,
-              "options": [
-                {"label": "Time on page", "value": "timeOnPage"},
-                {"label": "Scroll depth", "value": "scrollDepth"},
-                {"label": "Click-through rate", "value": "ctr"},
-                {"label": "Video views", "value": "videoViews"},
-                {"label": "Social shares", "value": "socialShares"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Engagement Settings",
-                    "controls": [
-                      {
-                        "type": "dropdown",
-                        "id": "engagementPeriod",
-                        "label": "Analysis period",
-                        "values": ["Last 7 days", "Last 30 days", "Last 90 days"],
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "engagementThreshold",
-                        "label": "Minimum engagement score",
-                        "inputType": "number",
-                        "placeholder": "50"
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
+            ]
+          }
+        }
+      },
+      {
+        "id": "Sensitivity_CRED_2",
+        "name": "Sub Activity A",
+        "pageConfig": "CreditA_dashboard.json",
+        "requirements": {
+          "Level1": "Sensitivity",
+          "Level2": "Credit",
+          "Level3": "SubActivityA"
+        },
+        "metadata": {
+          "tag": "[SUBA]",
+          "description": "Detailed sub-activity A",
+          "reportName": "SENSI_CR_SUBA",
+          "generateReport": true,
+          "inputId": "CREDIT_INPUT",
+          "form": {
+            "title": "Parameters Configuration",
+            "fields": [
+              {
+                "name": "rating",
+                "type": "dropdown",
+                "label": "Select Rating:",
+                "required": true,
+                "tag": true,
+                "options": [
+                  "AAA",
+                  "AA",
+                  "A",
+                  "BBB"
+                ],
+                "default": "A",
+                "description": "Credit rating"
+              },
+              {
+                "name": "horizon",
+                "type": "text",
+                "label": "Time Horizon (months):",
+                "required": true,
+                "tag": false,
+                "placeholder": "Enter months",
+                "default": "12",
+                "validation": "number,min=1",
+                "description": "Time horizon in months"
               }
-            }
+            ]
+          }
+        }
+      },
+      {
+        "id": "Sensitivity_CRED_3",
+        "name": "Sub Activity B",
+        "pageConfig": "CreditB_dashboard.json",
+        "requirements": {
+          "Level1": "Sensitivity",
+          "Level2": "Credit",
+          "Level3": "SubActivityB"
+        },
+        "metadata": {
+          "tag": "[SUBB]",
+          "description": "Detailed sub-activity B",
+          "reportName": "SENSI_CR_SUBB",
+          "generateReport": true,
+          "inputId": "CREDIT_INPUT_2",
+          "form": {
+            "title": "Parameters Configuration",
+            "fields": [
+              {
+                "name": "activities",
+                "type": "checklist",
+                "label": "Select Activities:",
+                "required": true,
+                "tag": true,
+                "options": [
+                  "Trading",
+                  "Investment",
+                  "Hedging"
+                ],
+                "default": [
+                  "Trading"
+                ],
+                "validation": "min 1",
+                "description": "Trading activities to include"
+              }
+            ]
           }
         }
       }
-    }
+    ]
   },
-  
-  "userData": {
-    "title": "User Data Analytics",
-    "description": "Configure user data analysis settings",
-    "fontSize": "15px",
-    "pageTagField": "level4.userThreshold",
+  "StressTest": {
+    "title": "Stress Test",
+    "description": "Stress test reports",
+    "form": {
+      "type": "dropdown",
+      "label": "Select Category:"
+    },
     "pageConfigs": [
       {
-        "id": "user_activity_summary",
-        "name": "Activity Summary",
-        "description": "Vue d'ensemble de l'activité utilisateur",
-        "pageConfig": "user_activity_summary.json",
+        "id": "StressTest_ACT1_1",
+        "name": "Activity 1",
+        "pageConfig": "Stress1_dashboard.json",
         "requirements": {
-          "level2": ["Active users"],
-          "level3": ["sessionsPerUser", "usageFrequency"],
-          "level4": ["userThreshold"]
+          "Level1": "StressTest",
+          "Level2": "Activity1"
+        },
+        "metadata": {
+          "tag": "[ACT1]",
+          "description": "Primary activity 1",
+          "reportName": "ST_ACT1",
+          "generateReport": true,
+          "inputId": "STRESS_INPUT",
+          "form": {
+            "title": "Parameters Configuration",
+            "fields": [
+              {
+                "name": "scenario",
+                "type": "dropdown",
+                "label": "Select Scenario:",
+                "required": true,
+                "tag": true,
+                "options": [
+                  "Base",
+                  "Adverse",
+                  "Severe"
+                ],
+                "default": "Base",
+                "description": "Stress test scenario"
+              },
+              {
+                "name": "severity",
+                "type": "dropdown",
+                "label": "Select Severity:",
+                "required": true,
+                "tag": false,
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "default": "Medium",
+                "description": "Scenario severity level"
+              }
+            ]
+          }
         }
       },
       {
-        "id": "user_segmentation",
-        "name": "User Segmentation",
-        "description": "Analyse des segments d'utilisateurs",
-        "pageConfig": "user_segmentation.json",
+        "id": "StressTest_ACT2_2",
+        "name": "Activity 2",
+        "pageConfig": "Stress2_dashboard.json",
         "requirements": {
-          "level2": ["New users", "Active users", "Premium users"],
-          "level3": ["sessionsPerUser", "featuresUsed", "engagementScore"],
-          "level4": ["userThreshold", "reportName"]
-        }
-      },
-      {
-        "id": "user_retention",
-        "name": "Retention Analysis",
-        "description": "Analyse de la rétention des utilisateurs",
-        "pageConfig": "user_retention.json",
-        "requirements": {
-          "level2": ["Active users", "Churned users"],
-          "level3": ["usageFrequency", "timeSpent"],
-          "level4": ["userThreshold"]
-        }
-      }
-    ],
-    "levels": {
-      "level2": {
-        "title": "User Segment",
-        "type": "dropdown",
-        "id": "userSegment",
-        "label": "Select user segment",
-        "values": ["New users", "Active users", "Premium users", "Churned users"],
-        "mandatory": true,
-        "nextLevels": {
-          "Active users": {
-            "level3": {
-              "title": "Activity Metrics",
-              "type": "checkbox",
-              "id": "activityMetrics",
-              "label": "Metrics to track",
-              "mandatory": true,
-              "options": [
-                {"label": "Sessions per user", "value": "sessionsPerUser"},
-                {"label": "Usage frequency", "value": "usageFrequency"},
-                {"label": "Features used", "value": "featuresUsed"},
-                {"label": "Time spent", "value": "timeSpent"},
-                {"label": "Engagement score", "value": "engagementScore"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Additional Settings",
-                    "controls": [
-                      {
-                        "type": "input",
-                        "id": "userThreshold",
-                        "label": "Minimum users threshold",
-                        "inputType": "number",
-                        "placeholder": "Enter minimum number",
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "reportName",
-                        "label": "Report name",
-                        "inputType": "text",
-                        "placeholder": "Enter report name"
-                      },
-                      {
-                        "type": "dropdown",
-                        "id": "dataSource",
-                        "label": "Data source",
-                        "values": ["Analytics API", "Database", "CSV Import", "Manual Entry"],
-                        "mandatory": false
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
+          "Level1": "StressTest",
+          "Level2": "Activity2"
+        },
+        "metadata": {
+          "tag": "[ACT2]",
+          "description": "Primary activity 2",
+          "reportName": "ST_ACT2",
+          "generateReport": true,
+          "inputId": "STRESS_INPUT",
+          "form": {
+            "title": "Parameters Configuration",
+            "fields": [
+              {
+                "name": "scenario",
+                "type": "dropdown",
+                "label": "Select Scenario:",
+                "required": true,
+                "tag": true,
+                "options": [
+                  "Base",
+                  "Adverse",
+                  "Severe"
+                ],
+                "default": "Base",
+                "description": "Stress test scenario"
+              },
+              {
+                "name": "severity",
+                "type": "dropdown",
+                "label": "Select Severity:",
+                "required": true,
+                "tag": false,
+                "options": [
+                  "Low",
+                  "Medium",
+                  "High"
+                ],
+                "default": "Medium",
+                "description": "Scenario severity level"
               }
-            }
-          },
-          "New users": {
-            "level3": {
-              "title": "Onboarding Metrics",
-              "type": "checkbox",
-              "id": "onboardingMetrics",
-              "label": "Onboarding indicators",
-              "mandatory": true,
-              "options": [
-                {"label": "Signup completion", "value": "signupCompletion"},
-                {"label": "First action time", "value": "firstActionTime"},
-                {"label": "Tutorial completion", "value": "tutorialCompletion"},
-                {"label": "First week retention", "value": "firstWeekRetention"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "New User Settings",
-                    "controls": [
-                      {
-                        "type": "input",
-                        "id": "cohortSize",
-                        "label": "Minimum cohort size",
-                        "inputType": "number",
-                        "placeholder": "100",
-                        "mandatory": true
-                      },
-                      {
-                        "type": "dropdown",
-                        "id": "timeframe",
-                        "label": "Analysis timeframe",
-                        "values": ["7 days", "14 days", "30 days"],
-                        "mandatory": true
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
-              }
-            }
+            ]
           }
         }
       }
-    }
+    ]
   },
-  
-  "systemMetrics": {
-    "title": "System Monitoring",
-    "description": "Configure system monitoring settings",
-    "fontSize": "14px",
-    "pageTagField": "level4.cpuThreshold",
+  "Correlation": {
+    "title": "Correlation",
+    "description": "Correlation reports",
+    "form": {
+      "type": "dropdown",
+      "label": "Select Category:"
+    },
     "pageConfigs": [
       {
-        "id": "system_performance",
-        "name": "System Performance",
-        "description": "Monitorage des performances système",
-        "pageConfig": "system_performance.json",
+        "id": "Correlation_1",
+        "name": "Correlation",
+        "pageConfig": "Correlation_dashboard.json",
         "requirements": {
-          "level2": ["Performance"],
-          "level3": ["cpuUsage", "memoryUsage", "apiResponseTime"],
-          "level4": ["cpuThreshold", "memoryThreshold"]
-        }
-      },
-      {
-        "id": "system_alerts",
-        "name": "Alert Dashboard",
-        "description": "Tableau de bord des alertes système",
-        "pageConfig": "system_alerts.json",
-        "requirements": {
-          "level2": ["Performance", "Availability"],
-          "level3": ["cpuUsage", "memoryUsage", "diskIO"],
-          "level4": ["alertEmail", "cpuThreshold"]
-        }
-      },
-      {
-        "id": "system_capacity",
-        "name": "Capacity Planning",
-        "description": "Planification de la capacité système",
-        "pageConfig": "system_capacity.json",
-        "requirements": {
-          "level2": ["Performance"],
-          "level3": ["cpuUsage", "memoryUsage", "diskIO", "networkLatency"],
-          "level4": ["cpuThreshold", "memoryThreshold"]
-        }
-      }
-    ],
-    "levels": {
-      "level2": {
-        "title": "Monitoring Type",
-        "type": "dropdown",
-        "id": "monitoringType",
-        "label": "Select monitoring type",
-        "values": ["Performance", "Availability", "Security", "Network"],
-        "mandatory": true,
-        "nextLevels": {
-          "Performance": {
-            "level3": {
-              "title": "Performance Indicators",
-              "type": "checkbox",
-              "id": "performanceIndicators",
-              "label": "Indicators to monitor",
-              "mandatory": true,
-              "options": [
-                {"label": "CPU Usage", "value": "cpuUsage"},
-                {"label": "Memory usage", "value": "memoryUsage"},
-                {"label": "API response time", "value": "apiResponseTime"},
-                {"label": "Disk I/O", "value": "diskIO"},
-                {"label": "Network latency", "value": "networkLatency"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Alert Settings",
-                    "controls": [
-                      {
-                        "type": "input",
-                        "id": "alertEmail",
-                        "label": "Alert email",
-                        "inputType": "email",
-                        "placeholder": "admin@example.com",
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "cpuThreshold",
-                        "label": "CPU threshold (%)",
-                        "inputType": "number",
-                        "placeholder": "80",
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "memoryThreshold",
-                        "label": "Memory threshold (%)",
-                        "inputType": "number",
-                        "placeholder": "85",
-                        "mandatory": false
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
+          "Level1": "Correlation"
+        },
+        "metadata": {
+          "tag": "[CORR]",
+          "description": "Correlation reports",
+          "reportName": "CORR",
+          "generateReport": true,
+          "inputId": "CORR_INPUT",
+          "form": {
+            "title": "Parameters Configuration",
+            "fields": [
+              {
+                "name": "period",
+                "type": "dropdown",
+                "label": "Select Period:",
+                "required": true,
+                "tag": true,
+                "options": [
+                  "Quarterly",
+                  "Monthly",
+                  "Yearly"
+                ],
+                "default": "Quarterly",
+                "description": "Correlation time period"
+              },
+              {
+                "name": "confidence",
+                "type": "dropdown",
+                "label": "Confidence Level:",
+                "required": true,
+                "tag": false,
+                "options": [
+                  "95%",
+                  "99%",
+                  "99.5%"
+                ],
+                "default": "95%",
+                "description": "Statistical confidence level"
               }
-            }
-          },
-          "Availability": {
-            "level3": {
-              "title": "Availability Metrics",
-              "type": "checkbox",
-              "id": "availabilityMetrics",
-              "label": "Uptime and availability",
-              "mandatory": true,
-              "options": [
-                {"label": "Uptime percentage", "value": "uptime"},
-                {"label": "Downtime incidents", "value": "downtimeIncidents"},
-                {"label": "Mean time to recovery", "value": "mttr"},
-                {"label": "Service level agreement", "value": "sla"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Availability Settings",
-                    "controls": [
-                      {
-                        "type": "input",
-                        "id": "slaTarget",
-                        "label": "SLA target (%)",
-                        "inputType": "number",
-                        "placeholder": "99.9",
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "alertWindow",
-                        "label": "Alert time window (minutes)",
-                        "inputType": "number",
-                        "placeholder": "5"
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
-              }
-            }
+            ]
           }
         }
       }
-    }
-  },
-  
-  "salesData": {
-    "title": "Sales Analytics",
-    "description": "Configure sales data analysis settings",
-    "fontSize": "16px",
-    "pageTagField": "level4.currency",
-    "pageConfigs": [
-      {
-        "id": "sales_overview",
-        "name": "Sales Overview",
-        "description": "Vue d'ensemble des ventes",
-        "pageConfig": "sales_overview.json",
-        "requirements": {
-          "level2": ["Revenue", "Customers", "Products"],
-          "level3": ["totalRevenue", "avgOrderValue"],
-          "level4": ["currency"]
-        }
-      },
-      {
-        "id": "sales_by_product",
-        "name": "Sales by Product",
-        "description": "Analyse des ventes par produit",
-        "pageConfig": "sales_by_product.json",
-        "requirements": {
-          "level2": ["Products"],
-          "level3": ["revenuePerCustomer", "yoyGrowth"],
-          "level4": ["currency", "region"]
-        }
-      },
-      {
-        "id": "sales_forecast",
-        "name": "Sales Forecast",
-        "description": "Prévisions des ventes",
-        "pageConfig": "sales_forecast.json",
-        "requirements": {
-          "level2": ["Revenue"],
-          "level3": ["totalRevenue", "mrr", "yoyGrowth"],
-          "level4": ["currency", "timeFrame"]
-        }
-      },
-      {
-        "id": "sales_regional",
-        "name": "Regional Sales",
-        "description": "Ventes par région géographique",
-        "pageConfig": "sales_regional.json",
-        "requirements": {
-          "level2": ["Regions"],
-          "level3": ["totalRevenue", "revenuePerCustomer"],
-          "level4": ["currency", "region"]
-        }
-      }
-    ],
-    "levels": {
-      "level2": {
-        "title": "Sales Analysis Type",
-        "type": "dropdown",
-        "id": "salesAnalysisType",
-        "label": "Select analysis type",
-        "values": ["Revenue", "Customers", "Products", "Regions"],
-        "mandatory": true,
-        "nextLevels": {
-          "Revenue": {
-            "level3": {
-              "title": "Revenue KPIs",
-              "type": "checkbox",
-              "id": "revenueKPIs",
-              "label": "Key performance indicators",
-              "mandatory": true,
-              "options": [
-                {"label": "Total revenue", "value": "totalRevenue"},
-                {"label": "Average order value", "value": "avgOrderValue"},
-                {"label": "Revenue per customer", "value": "revenuePerCustomer"},
-                {"label": "Monthly recurring revenue", "value": "mrr"},
-                {"label": "Year-over-year growth", "value": "yoyGrowth"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Report Settings",
-                    "controls": [
-                      {
-                        "type": "input",
-                        "id": "currency",
-                        "label": "Currency",
-                        "inputType": "text",
-                        "placeholder": "USD, EUR, GBP, etc.",
-                        "mandatory": true
-                      },
-                      {
-                        "type": "input",
-                        "id": "region",
-                        "label": "Region filter",
-                        "inputType": "text",
-                        "placeholder": "North America, Europe, Asia, etc."
-                      },
-                      {
-                        "type": "dropdown",
-                        "id": "timeFrame",
-                        "label": "Time frame",
-                        "values": ["Daily", "Weekly", "Monthly", "Quarterly", "Yearly"],
-                        "mandatory": false
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
-              }
-            }
-          },
-          "Products": {
-            "level3": {
-              "title": "Product Metrics",
-              "type": "checkbox",
-              "id": "productMetrics",
-              "label": "Product performance indicators",
-              "mandatory": true,
-              "options": [
-                {"label": "Units sold", "value": "unitsSold"},
-                {"label": "Revenue per product", "value": "revenuePerProduct"},
-                {"label": "Product margin", "value": "productMargin"},
-                {"label": "Inventory turnover", "value": "inventoryTurnover"},
-                {"label": "Return rate", "value": "returnRate"}
-              ],
-              "nextLevels": {
-                "selected": {
-                  "level4": {
-                    "title": "Product Analysis Settings",
-                    "controls": [
-                      {
-                        "type": "input",
-                        "id": "productCategory",
-                        "label": "Product category filter",
-                        "inputType": "text",
-                        "placeholder": "Electronics, Clothing, etc."
-                      },
-                      {
-                        "type": "dropdown",
-                        "id": "rankingMetric",
-                        "label": "Ranking metric",
-                        "values": ["Revenue", "Units sold", "Margin", "Growth"],
-                        "mandatory": true
-                      }
-                    ],
-                    "isLastLevel": true
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    ]
   }
 }
