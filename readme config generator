@@ -1,0 +1,435 @@
+USER GUIDE: Dashboard Configuration System
+
+📖 Introduction
+
+This user guide explains how to configure the Dashboard Generation System using Excel files. The system allows you to create dynamic, hierarchical dashboards where users navigate through levels, select options, fill forms, and generate customized reports.
+
+🎯 System Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    USER INTERFACE                            │
+│  Level1 → Level2 → Level3 → Input Forms → Generate Report   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                 CONFIGURATION LAYER                          │
+│  Excel Files → Python Script → config.json → Application    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   OUTPUT LAYER                               │
+│  Generated Pages → Charts/Tables → Reports → Analytics      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+📊 Excel File Structure
+
+The system uses 8 Excel sheets to define the entire configuration:
+
+1. Documentation Sheets (4 sheets)
+
+```
+1. Documentation_Levels   → Explains Level1/2/3 fields
+2. Documentation_Inputs   → Explains Input form fields  
+3. FormTypes              → All available form field types
+4. ValidationTypes        → Validation rules for fields
+```
+
+2. Data Sheets (4 sheets)
+
+```
+5. Level1                 → First level choices
+6. Level2                 → Second level choices (with PreviousLevel)
+7. Level3                 → Third level choices (with PreviousLevel)
+8. Inputs                 → Form field definitions
+```
+
+🔑 Key Concepts
+
+Hierarchical Navigation
+
+```
+Level1 (Main Category) → Level2 (Sub-category) → Level3 (Detailed Option)
+```
+
+Action Types
+
+· NextLevel → Proceed to next level
+· filename.json → Generate page with this configuration
+· Multiple files → file1.json, file2.json (generate multiple)
+
+Input Forms
+
+When a user selects an option with .json in Action, they see a form defined in the Inputs sheet.
+
+Report Names
+
+Automatically generated from Tags: Level1_Tag + Level2_Tag + Level3_Tag
+
+📝 Step-by-Step Configuration Guide
+
+Step 1: Define Level1 (Main Categories)
+
+Id Title Tag value Description Form label Action InputId
+1 Analytics [ANAL] Analytics Business analytics dropdown Select Report Type: NextLevel 
+
+Rules:
+
+· Id must be unique (1, 2, 3...)
+· Tag is used in report name generation
+· Action = NextLevel (go to Level2) or .json (direct report)
+· InputId required only if Action contains .json
+
+Step 2: Define Level2 (Sub-categories)
+
+PreviousLevel Id Title Tag value Form label Action InputId
+1 1 Sales [SALES] Sales dropdown Select Metric: sales_report.json SALES_INPUT
+
+Rules:
+
+· PreviousLevel must match a Level1 Id
+· If Action = .json, InputId MUST be filled
+· Multiple files allowed: report1.json, report2.json
+
+Step 3: Define Level3 (Detailed Options)
+
+PreviousLevel Id Title Tag value Form label Action InputId
+1 1 Regional [REG] Regional checklist Select Regions: regional_report.json REG_INPUT
+
+CRITICAL RULE: If Level3 Action contains .json, InputId MUST be provided.
+
+Step 4: Define Input Forms
+
+InputId FieldOrder FieldName FieldType FieldLabel Options Required DefaultValue Validation Tag
+SALES_INPUT 1 period dropdown Select Period: Monthly,Quarterly,Yearly true Quarterly none true
+
+Field Types Available:
+
+· dropdown - Single selection (requires Options)
+· checklist - Multiple selection (requires Options)
+· text - Free text input
+· number - Numeric input
+· date - Date picker
+· range - Slider control
+
+Tag Field:
+
+· true = Field is tagged/important
+· false = Standard field
+
+🔄 Generation Process
+
+1. Excel → config.json
+
+Run the Python script:
+
+```bash
+python generate_config_verified.py
+```
+
+The script:
+
+· ✅ Validates all data integrity
+· ✅ Checks required fields
+· ✅ Verifies references between sheets
+· ✅ Generates config.json
+
+2. config.json Structure
+
+```json
+{
+  "Analytics": {
+    "title": "Analytics",
+    "description": "Business analytics",
+    "form": {"type": "dropdown", "label": "Select Report Type:"},
+    "pageConfigs": [
+      {
+        "id": "ANAL_SALES_1",
+        "name": "Sales",
+        "pageConfig": "sales_report.json",
+        "requirements": {
+          "Level1": "Analytics",
+          "Level2": "Sales"
+        },
+        "metadata": {
+          "tag": "[SALES]",
+          "reportName": "ANAL_SALES",
+          "inputId": "SALES_INPUT",
+          "form": {
+            "fields": [
+              {
+                "name": "period",
+                "type": "dropdown",
+                "label": "Select Period:",
+                "options": ["Monthly", "Quarterly", "Yearly"],
+                "required": true,
+                "default": "Quarterly",
+                "tag": true
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+3. User Navigation Flow
+
+```
+USER: Selects "Analytics" in Level1 dropdown
+SYSTEM: Shows Level2 options (Sales, Marketing, etc.)
+USER: Selects "Sales" 
+SYSTEM: Shows form with "Select Period:" dropdown
+USER: Selects "Quarterly" and submits
+SYSTEM: Generates "ANAL_SALES" report with quarterly data
+```
+
+🎨 Form Types Examples
+
+Dropdown (Single Select)
+
+```
+Select Region:
+┌─────────────────┐
+│ North America   │ ← Selected
+│ Europe          │
+│ Asia Pacific    │
+│ Latin America   │
+└─────────────────┘
+```
+
+Checklist (Multi Select)
+
+```
+Select Metrics:
+☑ Revenue
+☑ Profit Margin  
+☐ Customer Count
+☑ Market Share
+```
+
+Text Input
+
+```
+Timeframe: [ 30 ] days
+```
+
+Number Input
+
+```
+Quantity: [ 100 ] units
+```
+
+Date Picker
+
+```
+Start Date: [ 2024-01-15 📅 ]
+```
+
+⚙️ Validation Rules
+
+Validation Example Description
+required true Field cannot be empty
+min 1 checklist At least 1 item selected
+max 5 checklist Maximum 5 items
+min=0 number Minimum value 0
+max=100 number Maximum value 100
+maxlength=255 text Maximum 255 characters
+pattern=\d{3} text Exactly 3 digits
+
+🚨 Common Errors & Solutions
+
+Error: "Level3: Action .json but InputId VIDE"
+
+Problem: Level3 has .json in Action but empty InputId
+Solution: Add InputId or create corresponding entry in Inputs sheet
+
+Error: "PreviousLevel X not found in Level1"
+
+Problem: Level2 references non-existent Level1 Id
+Solution: Check Level1 Id exists or correct PreviousLevel value
+
+Warning: "InputId defined but never used"
+
+Problem: InputId in Inputs sheet not referenced anywhere
+Solution: Either use it in Levels or remove from Inputs
+
+Error: "Duplicate value in Level1"
+
+Problem: Two Level1 entries have same value field
+Solution: Make value unique for each Level1 entry
+
+📋 Best Practices
+
+1. Naming Conventions
+
+· Tags: Use uppercase in brackets [ANAL], [SALES]
+· InputIds: Use descriptive names SALES_INPUT, REGIONAL_INPUT
+· Values: Use camelCase salesReport, regionalAnalysis
+
+2. Form Design
+
+· Group related fields under same InputId
+· Use FieldOrder for logical flow
+· Set sensible DefaultValue
+· Use Tag=true for important filter fields
+
+3. Navigation Design
+
+· Limit to 3 levels maximum
+· Use NextLevel for categories, .json for end points
+· Keep Level1 options between 3-5 choices
+
+4. File Organization
+
+```
+dashboard_config/
+├── DashboardConfig.xlsx      # Configuration
+├── generate_config.py        # Generation script
+├── config.json              # Generated config
+└── page_configs/            # JSON page templates
+    ├── sales_report.json
+    ├── regional_report.json
+    └── ...
+```
+
+🛠️ Maintenance Checklist
+
+Weekly
+
+· Verify all .json files exist in page_configs/
+· Test navigation flow for each Level1 option
+· Check generated config.json for errors
+
+Monthly
+
+· Review and update form field defaults
+· Validate reportName generation
+· Archive old configurations
+
+When Adding New Reports
+
+1. Add Level entry in appropriate sheet
+2. Create Input form if needed
+3. Create JSON template in page_configs/
+4. Run generation script
+5. Test complete user flow
+
+🔍 Debugging Guide
+
+Script Output Analysis
+
+```bash
+# Run with verbose output
+python generate_config_verified.py --verbose
+
+# Check specific validation
+python generate_config_verified.py --check-levels
+python generate_config_verified.py --check-inputs
+```
+
+Common Issues Table
+
+Symptom Likely Cause Solution
+Level2 not showing PreviousLevel mismatch Check Level1 Id exists
+Form not appearing InputId missing/typo Verify InputId in both sheets
+Report name wrong Tag format incorrect Use [UPPERCASE] format
+Form field missing FieldOrder not sequential Reorder fields 1,2,3...
+
+📞 Support & Resources
+
+Quick Reference Commands
+
+```bash
+# Generate config
+python generate_config_verified.py
+
+# Create Excel template
+python create_complete_excel.py
+
+# Validate only
+python generate_config_verified.py --validate-only
+
+# Fix common issues
+python fix_excel.py
+```
+
+Troubleshooting Matrix
+
+Problem Area Check Sheet Key Fields
+Navigation Level1/2/3 Action, PreviousLevel
+Forms Inputs InputId, FieldType, Options
+Validation Inputs Required, Validation
+Naming All Tag, value, InputId
+
+🎬 Example: Complete Workflow
+
+Scenario: Add "Customer Satisfaction Report"
+
+Step 1: Add to Level2
+
+```excel
+PreviousLevel: 1 (Analytics)
+Id: 3
+Title: Customer Satisfaction
+Tag: [SAT]
+value: CustomerSatisfaction
+Form: dropdown
+label: Select Survey Type:
+Action: satisfaction_report.json
+InputId: SAT_INPUT
+```
+
+Step 2: Add Form to Inputs
+
+```excel
+InputId: SAT_INPUT
+FieldOrder: 1
+FieldName: survey_type
+FieldType: dropdown
+FieldLabel: Select Survey Type:
+Options: NPS,CSAT,CES
+Required: true
+DefaultValue: NPS
+Tag: true
+```
+
+Step 3: Create JSON Template
+
+```json
+// page_configs/satisfaction_report.json
+{
+  "title": "Customer Satisfaction Report",
+  "type": "dashboard",
+  "visualizations": [...]
+}
+```
+
+Step 4: Generate & Test
+
+```bash
+python generate_config_verified.py
+# Output: "ANAL_SAT" report added successfully
+```
+
+✅ Success Indicators
+
+Your configuration is working correctly when:
+
+1. ✅ python generate_config_verified.py runs without errors
+2. ✅ config.json is created with all expected pages
+3. ✅ User can navigate through all levels without issues
+4. ✅ Forms appear when expected with all fields
+5. ✅ Report names follow TAG1_TAG2_TAG3 pattern
+6. ✅ All .json files in Action exist in page_configs/
+
+---
+
+Remember: The Excel configuration is the single source of truth. Any changes to the dashboard navigation or forms must be made in the Excel file first, then regenerated using the Python script.
+
+Last Updated: Configuration Version 2.0
+Support Contact: System Administrator
+Documentation Version: 1.0
